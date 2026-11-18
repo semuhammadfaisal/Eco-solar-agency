@@ -19,6 +19,8 @@ public/uploads/*
 !public/uploads/company/
 public/uploads/company/*
 !public/uploads/company/.gitkeep
+# This is the bundled fallback referenced by existing production settings.
+!public/uploads/company/solar-agency-logo.jpeg
 
 # OS / editor
 .DS_Store

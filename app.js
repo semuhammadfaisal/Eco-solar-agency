@@ -110,6 +110,44 @@ app.use(
   })
 );
 
+// Render Free rebuilds its local filesystem on deploy. Static middleware serves
+// every upload that is present; these handlers only run for a missing file and
+// prevent a stale database path from falling through to the application's HTML
+// 404 page. Company branding falls back to the bundled logo. Other lost images
+// receive an honest placeholder instead of pretending the original survived.
+const bundledCompanyLogo = path.join(__dirname, 'assets', 'images', 'solar_agency_LOGO.jpeg');
+const unavailableUploadSvg = `
+  <svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540">
+    <rect width="960" height="540" fill="#f1f5f9"/>
+    <g fill="none" stroke="#94a3b8" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="365" y="125" width="230" height="190" rx="20"/>
+      <circle cx="435" cy="195" r="25"/>
+      <path d="m390 285 65-70 48 48 35-35 32 35"/>
+    </g>
+    <text x="480" y="390" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" fill="#475569">Uploaded file is unavailable</text>
+    <text x="480" y="430" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" fill="#64748b">Restore it from durable storage or upload it again</text>
+  </svg>`;
+
+app.get('/uploads/company/:filename', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  return res.sendFile(bundledCompanyLogo);
+});
+
+app.get(/^\/uploads\/(?:surveys|expenses)\/[^/]+\.(?:jpe?g|png|webp|gif)$/i, (req, res) => {
+  return res
+    .status(200)
+    .set({ 'Cache-Control': 'no-store', 'Content-Type': 'image/svg+xml; charset=utf-8' })
+    .send(unavailableUploadSvg);
+});
+
+app.get('/uploads/expenses/:filename', (req, res) => {
+  return res
+    .status(410)
+    .set('Cache-Control', 'no-store')
+    .type('text/plain')
+    .send('This uploaded attachment is no longer available. Please upload it again.');
+});
+
 // Serve UI dependencies locally. This removes external DNS/TLS/CDN latency
 // and keeps the application usable on unreliable or offline shop networks.
 const vendorCache = {

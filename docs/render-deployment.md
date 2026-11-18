@@ -16,8 +16,9 @@ existing `.env` file.
 
 1. Create an Atlas project and a Free cluster.
 2. Create a database user with a unique, strong password.
-3. In **Network Access**, allow the outbound IP addresses shown by Render for
-   the web service. For an initial test only, `0.0.0.0/0` works but exposes the
+3. Open the Render service, choose **Connect > Outbound**, and copy every CIDR
+   range shown there. In Atlas **Database & Network Access > IP Access List**,
+   add every copied Render range. For an initial test only, `0.0.0.0/0` works but exposes the
    database endpoint to the internet; the database password then becomes the
    only network-level barrier.
 4. Copy the Node.js connection string and replace its password and database
@@ -98,6 +99,13 @@ Render Free has an ephemeral filesystem. Company logos and survey photos saved
 under `public/uploads` can disappear after a restart or deployment. Before real
 use, move uploads to persistent object storage such as Cloudinary, Amazon S3,
 or an S3-compatible provider.
+
+The bundled `solar-agency-logo.jpeg` is committed and survives deployments.
+When a database record refers to a lost custom logo, the web UI serves that
+bundled logo as a fallback. Lost survey and receipt images display an explicit
+"unavailable" placeholder; their original content cannot be reconstructed and
+must be uploaded again. These fallbacks prevent misleading application 404
+pages but are not a substitute for durable object storage.
 
 ### Scheduled jobs
 
