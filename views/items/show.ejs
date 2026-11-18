@@ -1,0 +1,305 @@
+<%
+  var headerActions = [];
+  if (can('inventory.manage')) {
+    headerActions.push({ label: 'Stock in', url: '/items/stock-in?item=' + item._id, icon: 'bi-box-arrow-in-down', class: 'btn-success' });
+    headerActions.push({ label: 'Edit item', url: '/items/' + item._id + '/edit', icon: 'bi-pencil', class: 'btn-primary' });
+  }
+  if (can('purchases.manage')) {
+    headerActions.push({ label: 'New purchase', url: '/purchases/new', icon: 'bi-receipt', class: 'btn-outline-secondary' });
+  }
+  headerActions.push({ label: 'Back to inventory', url: '/items', icon: 'bi-arrow-left', class: 'btn-outline-secondary' });
+
+  var categoryLabel = inventory.ITEM_CATEGORY_LABELS[item.category] || item.category;
+  var categoryBadge = inventory.ITEM_CATEGORY_BADGES[item.category] || 'secondary';
+  var stockClass = item.isOutOfStock ? 'text-danger' : (item.isLowStock ? 'text-warning-emphasis' : 'text-success');
+  var specBits = [];
+  if (item.wattage !== null && item.wattage !== undefined) specBits.push(formatQty(item.wattage) + ' W');
+  if (item.capacityKw !== null && item.capacityKw !== undefined) specBits.push(formatQty(item.capacityKw) + ' kW');
+%>
+
+<%- include('../partials/page-header', {
+  heading: item.name,
+  subheading: item.sku + ' · ' + categoryLabel + (item.brand ? ' · ' + item.brand : ''),
+  actions: headerActions
+}) %>
+
+<div class="row g-3 mt-1">
+  <div class="col-6 col-lg-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-primary-subtle text-primary"><i class="bi bi-boxes"></i></span>
+      <div class="stat-value <%= stockClass %>"><%= formatQty(item.currentStock) %></div>
+      <div class="stat-label">On hand (<%= item.unit %>)</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-warning-subtle text-warning-emphasis"><i class="bi bi-arrow-down-square"></i></span>
+      <div class="stat-value"><%= formatQty(item.minStock) %></div>
+      <div class="stat-label">Minimum level</div>
+    </div></div>
+  </div>
+  <% if (canViewCosts) { %>
+    <div class="col-6 col-lg-3">
+      <div class="card app-card h-100"><div class="card-body stat-card">
+        <span class="stat-icon bg-info-subtle text-info-emphasis"><i class="bi bi-calculator"></i></span>
+        <div class="stat-value"><%= formatPKR(item.avgCostPaisa) %></div>
+        <div class="stat-label">Average cost</div>
+      </div></div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card app-card h-100"><div class="card-body stat-card">
+        <span class="stat-icon bg-success-subtle text-success"><i class="bi bi-cash-stack"></i></span>
+        <div class="stat-value"><%= formatPKR(item.stockValuePaisa) %></div>
+        <div class="stat-label">Stock value</div>
+      </div></div>
+    </div>
+  <% } else { %>
+    <div class="col-6 col-lg-3">
+      <div class="card app-card h-100"><div class="card-body stat-card">
+        <span class="stat-icon bg-info-subtle text-info-emphasis"><i class="bi bi-tag"></i></span>
+        <div class="stat-value"><%= formatPKR(item.retailPricePaisa || item.sellingPricePaisa) %></div>
+        <div class="stat-label">Retail price</div>
+      </div></div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card app-card h-100"><div class="card-body stat-card">
+        <span class="stat-icon bg-secondary-subtle text-secondary-emphasis"><i class="bi bi-upc-scan"></i></span>
+        <div class="stat-value"><%= serialCount %></div>
+        <div class="stat-label">Serial records</div>
+      </div></div>
+    </div>
+  <% } %>
+</div>
+
+<div class="row g-3 mt-1">
+  <div class="col-12 col-xl-7">
+    <div class="card app-card">
+      <div class="card-header bg-transparent d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <h2 class="h6 fw-semibold mb-0">Item details</h2>
+        <div class="d-flex flex-wrap gap-2">
+          <span class="badge text-bg-<%= categoryBadge %>"><%= categoryLabel %></span>
+          <% if (item.hasSerial) { %>
+            <span class="badge text-bg-info"><i class="bi bi-upc-scan me-1"></i>Serial tracked</span>
+          <% } %>
+        </div>
+      </div>
+      <div class="card-body p-4">
+        <dl class="row mb-0 small">
+          <dt class="col-5 col-sm-4 text-muted fw-normal">SKU</dt>
+          <dd class="col-7 col-sm-8 font-monospace"><%= item.sku %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Brand / model</dt>
+          <dd class="col-7 col-sm-8"><%= [item.brand, item.model].filter(Boolean).join(' · ') || '—' %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Specs</dt>
+          <dd class="col-7 col-sm-8"><%= specBits.length ? specBits.join(' · ') : '—' %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Unit</dt>
+          <dd class="col-7 col-sm-8"><%= inventory.ITEM_UNIT_LABELS[item.unit] || item.unit %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Location</dt>
+          <dd class="col-7 col-sm-8"><%= item.location || '—' %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Selling price</dt>
+          <dd class="col-7 col-sm-8"><%= formatPKR(item.sellingPricePaisa) %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Wholesale price</dt>
+          <dd class="col-7 col-sm-8"><%= formatPKR(item.wholesalePricePaisa || item.sellingPricePaisa) %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Retail price</dt>
+          <dd class="col-7 col-sm-8"><%= formatPKR(item.retailPricePaisa || item.sellingPricePaisa) %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Max shop discount</dt>
+          <dd class="col-7 col-sm-8"><%= item.maxDiscountPercent || 0 %>%</dd>
+
+          <% if (canViewCosts) { %>
+            <dt class="col-5 col-sm-4 text-muted fw-normal">Purchase price</dt>
+            <dd class="col-7 col-sm-8"><%= formatPKR(item.purchasePricePaisa) %></dd>
+
+            <dt class="col-5 col-sm-4 text-muted fw-normal">Last purchase cost</dt>
+            <dd class="col-7 col-sm-8"><%= formatPKR(item.lastPurchasePricePaisa) %></dd>
+          <% } %>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Product warranty</dt>
+          <dd class="col-7 col-sm-8"><%= item.productWarrantyYears ? item.productWarrantyYears + ' year(s)' : '—' %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Performance warranty</dt>
+          <dd class="col-7 col-sm-8"><%= item.performanceWarrantyYears ? item.performanceWarrantyYears + ' year(s)' : '—' %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Added</dt>
+          <dd class="col-7 col-sm-8"><%= formatDate(item.createdAt) %></dd>
+        </dl>
+
+        <% if (item.specs) { %>
+          <hr class="my-4">
+          <h3 class="h6 fw-semibold text-uppercase text-muted mb-2">Specifications</h3>
+          <p class="small mb-0" style="white-space:pre-line"><%= item.specs %></p>
+        <% } %>
+
+        <% if (item.notes) { %>
+          <hr class="my-4">
+          <h3 class="h6 fw-semibold text-uppercase text-muted mb-2">Notes</h3>
+          <p class="small mb-0" style="white-space:pre-line"><%= item.notes %></p>
+        <% } %>
+      </div>
+    </div>
+
+    <div class="card app-card mt-3">
+      <div class="card-header bg-transparent d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <h2 class="h6 fw-semibold mb-0">Recent stock movements</h2>
+        <a href="/stock?item=<%= item._id %>" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-arrow-left-right me-1"></i>Full ledger
+        </a>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle app-table mb-0">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th class="text-end">Qty</th>
+              <th>Reference</th>
+              <th class="text-end">Balance</th>
+              <th>User</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!movements.length) { %>
+              <tr><td colspan="6" class="text-center py-4 text-muted">No stock movements yet.</td></tr>
+            <% } else { %>
+              <% movements.forEach(function (movement) { %>
+                <tr>
+                  <td class="small text-muted"><%= formatDate(movement.occurredAt) %></td>
+                  <td><span class="badge text-bg-<%= inventory.STOCK_MOVEMENT_BADGES[movement.type] || 'secondary' %>"><%= inventory.STOCK_MOVEMENT_LABELS[movement.type] || movement.type %></span></td>
+                  <td class="text-end fw-semibold <%= movement.qty > 0 ? 'text-success' : 'text-danger' %>">
+                    <%= movement.qty > 0 ? '+' : '' %><%= formatQty(movement.qty) %>
+                  </td>
+                  <td class="small font-monospace"><%= movement.reference || '—' %></td>
+                  <td class="text-end small"><%= formatQty(movement.balanceAfter) %></td>
+                  <td class="small text-muted"><%= movement.createdBy ? movement.createdBy.name : 'System' %></td>
+                </tr>
+              <% }); %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-5">
+    <% if (item.hasSerial) { %>
+      <div class="card app-card">
+        <div class="card-header bg-transparent d-flex flex-wrap gap-2 justify-content-between align-items-center">
+          <h2 class="h6 fw-semibold mb-0">Serial status</h2>
+          <a href="/serials?item=<%= item._id %>" class="btn btn-sm btn-outline-secondary">All serials</a>
+        </div>
+        <div class="card-body">
+          <div class="d-flex flex-wrap gap-2 mb-3">
+            <% inventory.SERIAL_STATUSES.forEach(function (status) { %>
+              <span class="badge text-bg-<%= inventory.SERIAL_STATUS_BADGES[status] %>">
+                <%= inventory.SERIAL_STATUS_LABELS[status] %>: <%= serialStats[status] || 0 %>
+              </span>
+            <% }); %>
+          </div>
+          <div class="small text-muted mb-0">
+            <%= serialCount %> serial record<%= serialCount === 1 ? '' : 's' %> in total.
+            In-stock and defective serials make up the <strong><%= formatQty(item.currentStock) %></strong> units on hand.
+          </div>
+        </div>
+      </div>
+
+      <div class="card app-card mt-3">
+        <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">Latest serials</h2></div>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle app-table mb-0">
+            <thead><tr><th>Serial</th><th>Status</th><th>Customer</th></tr></thead>
+            <tbody>
+              <% if (!serials.length) { %>
+                <tr><td colspan="3" class="text-center py-4 text-muted small">No serials received yet.</td></tr>
+              <% } else { %>
+                <% serials.forEach(function (serialDoc) { %>
+                  <tr>
+                    <td class="font-monospace small"><a href="/serials/<%= serialDoc._id %>"><%= serialDoc.serial %></a></td>
+                    <td><span class="badge text-bg-<%= inventory.SERIAL_STATUS_BADGES[serialDoc.status] || 'secondary' %>"><%= inventory.SERIAL_STATUS_LABELS[serialDoc.status] || serialDoc.status %></span></td>
+                    <td class="small text-muted"><%= serialDoc.customer ? serialDoc.customer.name : '—' %></td>
+                  </tr>
+                <% }); %>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    <% } %>
+
+    <div class="card app-card mt-3">
+      <div class="card-header bg-transparent d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <h2 class="h6 fw-semibold mb-0">Stock by branch</h2>
+        <a href="/branches" class="btn btn-sm btn-outline-secondary">Branches</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle app-table mb-0">
+          <thead><tr><th>Branch</th><th class="text-end">On hand</th></tr></thead>
+          <tbody>
+            <% if (!branchBalances || !branchBalances.length) { %>
+              <tr><td colspan="2" class="text-center py-4 text-muted small">No active branches.</td></tr>
+            <% } else { %>
+              <% branchBalances.forEach(function (row) { %>
+                <tr>
+                  <td class="small">
+                    <a href="/branches/<%= row.branch._id %>/stock" class="text-decoration-none">
+                      <%= row.branch.name %>
+                    </a>
+                    <span class="badge text-bg-light border font-monospace ms-1"><%= row.branch.code %></span>
+                  </td>
+                  <td class="text-end small fw-semibold <%= row.quantity > 0 ? '' : 'text-muted' %>">
+                    <%= formatQty(row.quantity) %> <span class="text-muted fw-normal"><%= item.unit %></span>
+                  </td>
+                </tr>
+              <% }); %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card app-card mt-3">
+      <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">Quick actions</h2></div>
+      <div class="list-group list-group-flush">
+        <% if (can('inventory.manage')) { %>
+          <a href="/items/stock-in?item=<%= item._id %>" class="list-group-item list-group-item-action">
+            <i class="bi bi-box-arrow-in-down me-2 text-success"></i>Add stock to a branch
+          </a>
+        <% } %>
+        <a href="/stock?item=<%= item._id %>" class="list-group-item list-group-item-action">
+          <i class="bi bi-arrow-left-right me-2 text-muted"></i>View stock ledger
+        </a>
+        <% if (can('purchases.manage')) { %>
+          <a href="/purchases/new" class="list-group-item list-group-item-action">
+            <i class="bi bi-receipt me-2 text-muted"></i>Create purchase order
+          </a>
+        <% } %>
+        <% if (item.hasSerial) { %>
+          <a href="/serials?item=<%= item._id %>" class="list-group-item list-group-item-action">
+            <i class="bi bi-upc-scan me-2 text-muted"></i>Search this item's serials
+          </a>
+        <% } %>
+      </div>
+    </div>
+
+    <% if (can('inventory.manage')) { %>
+      <div class="card app-card border-danger-subtle mt-3">
+        <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0 text-danger">Danger zone</h2></div>
+        <div class="card-body">
+          <p class="small text-muted">
+            Products can only be deleted when their stock and serial records are cleared. This is a soft delete.
+          </p>
+          <button type="button" class="btn btn-outline-danger btn-sm"
+                  data-delete-url="/items/<%= item._id %>"
+                  data-delete-name="<%= item.name %>">
+            <i class="bi bi-trash me-1"></i>Delete item
+          </button>
+        </div>
+      </div>
+    <% } %>
+  </div>
+</div>

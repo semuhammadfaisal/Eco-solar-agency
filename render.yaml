@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: solar-agency-software
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 22.14.0
+      - key: APP_NAME
+        value: Solar Agency
+      - key: APP_URL
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: SESSION_MAX_AGE_DAYS
+        value: "14"
+      - key: BCRYPT_ROUNDS
+        value: "12"

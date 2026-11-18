@@ -1,0 +1,38 @@
+<%- include('../partials/page-header', {
+  heading: 'Site surveys',
+  subheading: total + ' survey' + (total === 1 ? '' : 's') + ' scheduled or completed',
+  actions: [
+    { label: 'Calendar', url: '/surveys/calendar', icon: 'bi-calendar3', class: 'btn-outline-secondary' }
+  ].concat(canSchedule ? [{ label: 'Schedule survey', url: '/surveys/new', icon: 'bi-plus-lg', class: 'btn-primary' }] : [])
+}) %>
+
+<div class="card app-card mt-3">
+  <div class="card-body border-bottom">
+    <form method="GET" class="row g-2 align-items-end">
+      <div class="col-12 col-md-4"><label class="form-label small text-muted" for="search">Search</label><input class="form-control" id="search" name="search" value="<%= filters.search %>" placeholder="Survey number"></div>
+      <div class="col-6 col-md-2"><label class="form-label small text-muted" for="status">Status</label><select class="form-select" id="status" name="status"><option value="">All</option><% surveys.SURVEY_STATUSES.forEach(function (value) { %><option value="<%= value %>" <%= filters.status === value ? 'selected' : '' %>><%= surveys.SURVEY_STATUS_LABELS[value] %></option><% }) %></select></div>
+      <% if (currentUser.role !== 'surveyor') { %><div class="col-6 col-md-3"><label class="form-label small text-muted" for="surveyor">Surveyor</label><select class="form-select" id="surveyor" name="surveyor"><option value="">All surveyors</option><% surveyors.forEach(function (user) { %><option value="<%= user._id %>" <%= String(filters.surveyor) === String(user._id) ? 'selected' : '' %>><%= user.name %></option><% }) %></select></div><% } %>
+      <div class="col-12 col-md-3 d-flex gap-2"><button class="btn btn-primary flex-grow-1"><i class="bi bi-funnel me-1"></i>Filter</button><a class="btn btn-outline-secondary" href="/surveys">Reset</a></div>
+    </form>
+  </div>
+  <div class="table-responsive">
+    <table class="table app-table align-middle mb-0">
+      <thead><tr><th>Survey</th><th>Customer</th><th>Surveyor</th><th>Scheduled</th><th>Status</th><th>Recommendation</th><th></th></tr></thead>
+      <tbody>
+      <% if (!surveyRows.length) { %><tr><td colspan="7" class="text-center text-muted py-5"><i class="bi bi-clipboard2-x fs-2 d-block mb-2"></i>No surveys found.</td></tr><% } %>
+      <% surveyRows.forEach(function (row) { var contact = row.customer || {}; %>
+        <tr>
+          <td><a class="fw-semibold text-decoration-none" href="/surveys/<%= row._id %>"><%= row.number %></a></td>
+          <td><div class="fw-medium"><%= contact.name || contact.contactName || 'Unlinked' %></div><div class="small text-muted"><%= contact.phone || '' %></div></td>
+          <td><%= row.surveyor ? row.surveyor.name : '—' %></td>
+          <td><%= formatDateTime(row.scheduledAt) %></td>
+          <td><span class="badge text-bg-<%= surveys.SURVEY_STATUS_BADGES[row.status] %>"><%= surveys.SURVEY_STATUS_LABELS[row.status] %></span></td>
+          <td><%= row.recommendedKw ? formatQty(row.recommendedKw) + ' kW' : '—' %></td>
+          <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="/surveys/<%= row._id %>">View</a></td>
+        </tr>
+      <% }) %>
+      </tbody>
+    </table>
+  </div>
+  <% if (pagination.totalPages > 1) { %><div class="card-footer bg-transparent"><%- include('../partials/pagination', { pagination: pagination }) %></div><% } %>
+</div>

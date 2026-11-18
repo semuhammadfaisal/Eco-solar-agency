@@ -1,0 +1,227 @@
+<%- include('../partials/page-header', {
+  heading: 'Service & Complaint Tickets',
+  subheading: 'Customer support tickets, hardware fault investigations, SLA response timers, and technician dispatch.',
+  actions: [
+    ...(can('complaints.manage') ? [{ label: 'New service ticket', url: '#', icon: 'bi-plus-lg', class: 'btn-primary', attrs: 'data-bs-toggle="modal" data-bs-target="#newTicketModal"' }] : []),
+    { label: 'Maintenance schedule', url: '/maintenance', icon: 'bi-calendar-check', class: 'btn-outline-secondary' }
+  ]
+}) %>
+
+<!-- Search & Filters -->
+<div class="card app-card mb-3">
+  <div class="card-body p-3">
+    <form method="GET" action="/complaints" class="row g-2 align-items-center">
+      <div class="col-12 col-md-3">
+        <div class="input-group">
+          <span class="input-group-text bg-transparent text-muted"><i class="bi bi-search"></i></span>
+          <input type="text" class="form-control" name="search" value="<%= filters.search || '' %>"
+                 placeholder="Search ticket # or description...">
+        </div>
+      </div>
+
+      <div class="col-6 col-md-3">
+        <select class="form-select" name="issueType">
+          <option value="">All Issue Categories</option>
+          <% types.forEach(function (t) { %>
+            <option value="<%= t %>" <%= filters.issueType === t ? 'selected' : '' %>>
+              <%= installationsConfig.COMPLAINT_TYPE_LABELS[t] || t %>
+            </option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div class="col-6 col-md-2">
+        <select class="form-select" name="priority">
+          <option value="">All Priorities</option>
+          <% priorities.forEach(function (p) { %>
+            <option value="<%= p %>" <%= filters.priority === p ? 'selected' : '' %>>
+              <%= p.toUpperCase() %>
+            </option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div class="col-6 col-md-2">
+        <select class="form-select" name="status">
+          <option value="">All Statuses</option>
+          <% installationsConfig.COMPLAINT_STATUSES.forEach(function (s) { %>
+            <option value="<%= s %>" <%= filters.status === s ? 'selected' : '' %>>
+              <%= installationsConfig.COMPLAINT_STATUS_LABELS[s] || s %>
+            </option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div class="col-6 col-md-2 d-flex gap-2">
+        <button type="submit" class="btn btn-primary flex-fill">Filter</button>
+        <a href="/complaints" class="btn btn-light border">Reset</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Complaints Table -->
+<div class="card app-card">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light text-muted small text-uppercase">
+        <tr>
+          <th>Ticket #</th>
+          <th>Customer</th>
+          <th>Issue Category</th>
+          <th>Priority</th>
+          <th>Coverage</th>
+          <th>SLA Target</th>
+          <th>Technician</th>
+          <th>Status</th>
+          <th class="text-end">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (!complaints.length) { %>
+          <tr>
+            <td colspan="9" class="text-center py-4 text-muted">No complaint tickets logged.</td>
+          </tr>
+        <% } else { %>
+          <% complaints.forEach(function (c) { %>
+            <tr>
+              <td>
+                <a href="/complaints/<%= c._id %>" class="font-monospace fw-bold text-decoration-none">
+                  <%= c.ticketNumber %>
+                </a>
+              </td>
+              <td>
+                <div class="fw-semibold">
+                  <% if (c.customer) { %>
+                    <a href="/customers/<%= c.customer._id %>" class="text-dark text-decoration-none">
+                      <%= c.customer.name %>
+                    </a>
+                  <% } else { %>—<% } %>
+                </div>
+                <div class="small text-muted"><%= c.customer ? c.customer.phone : '' %></div>
+              </td>
+              <td>
+                <span class="badge text-bg-light border">
+                  <%= installationsConfig.COMPLAINT_TYPE_LABELS[c.issueType] || c.issueType %>
+                </span>
+              </td>
+              <td>
+                <span class="badge text-bg-<%= installationsConfig.COMPLAINT_PRIORITY_BADGES[c.priority] || 'secondary' %>">
+                  <%= c.priority.toUpperCase() %>
+                </span>
+              </td>
+              <td>
+                <% if (c.isUnderWarranty) { %>
+                  <span class="badge text-bg-success">Under Warranty</span>
+                <% } else { %>
+                  <span class="badge text-bg-warning">Paid Service</span>
+                <% } %>
+              </td>
+              <td class="small">
+                <div><%= formatDateTime(c.targetResolutionDate) %></div>
+                <% if (c.isSlaBreached) { %>
+                  <span class="badge text-bg-danger" style="font-size:0.7rem;">SLA Breached</span>
+                <% } else if (['resolved', 'closed'].includes(c.status)) { %>
+                  <span class="badge text-bg-success" style="font-size:0.7rem;">Within SLA</span>
+                <% } else { %>
+                  <span class="text-muted" style="font-size:0.7rem;"><%= c.slaHours %>h SLA</span>
+                <% } %>
+              </td>
+              <td>
+                <span class="small fw-semibold"><%= c.assignedTechnician ? c.assignedTechnician.name : 'Unassigned' %></span>
+              </td>
+              <td>
+                <span class="badge text-bg-<%= installationsConfig.COMPLAINT_STATUS_BADGES[c.status] || 'secondary' %>">
+                  <%= installationsConfig.COMPLAINT_STATUS_LABELS[c.status] || c.status %>
+                </span>
+              </td>
+              <td class="text-end">
+                <a href="/complaints/<%= c._id %>" class="btn btn-sm btn-outline-primary">
+                  Manage
+                </a>
+              </td>
+            </tr>
+          <% }); %>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+
+  <% if (pagination.pages > 1) { %>
+    <div class="card-footer bg-transparent py-3">
+      <%- include('../partials/pagination', { pagination }) %>
+    </div>
+  <% } %>
+</div>
+
+<!-- Modal: New Complaint Ticket -->
+<div class="modal fade" id="newTicketModal" tabindex="-1" aria-labelledby="newTicketModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="POST" action="/complaints">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+        <div class="modal-header">
+          <h5 class="modal-title" id="newTicketModalLabel"><i class="bi bi-headset me-2"></i>Lodge Service / Complaint Ticket</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="row g-2 mb-3">
+            <div class="col-12 col-md-6">
+              <label class="form-label small fw-semibold">Customer *</label>
+              <select class="form-select form-select-sm" name="customer" required>
+                <option value="">Select customer...</option>
+                <% customers.forEach(function (cust) { %>
+                  <option value="<%= cust._id %>" <%= filters.customer === String(cust._id) ? 'selected' : '' %>>
+                    <%= cust.name %> (<%= cust.code %> - <%= cust.phone %>)
+                  </option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label small fw-semibold">Issue Category *</label>
+              <select class="form-select form-select-sm" name="issueType" required>
+                <% types.forEach(function (t) { %>
+                  <option value="<%= t %>"><%= installationsConfig.COMPLAINT_TYPE_LABELS[t] || t %></option>
+                <% }); %>
+              </select>
+            </div>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-12 col-md-6">
+              <label class="form-label small fw-semibold">Ticket Priority</label>
+              <select class="form-select form-select-sm" name="priority">
+                <option value="medium">Medium (72h SLA)</option>
+                <option value="high">High (48h SLA)</option>
+                <option value="urgent">Urgent (24h SLA)</option>
+                <option value="low">Low (7 Days SLA)</option>
+              </select>
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label small fw-semibold">Assign Technician (Optional)</label>
+              <select class="form-select form-select-sm" name="assignedTechnician">
+                <option value="">Leave unassigned...</option>
+                <% technicians.forEach(function (tech) { %>
+                  <option value="<%= tech._id %>"><%= tech.name %> (<%= tech.role %>)</option>
+                <% }); %>
+              </select>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Description & Symptoms *</label>
+            <textarea class="form-control form-control-sm" name="description" rows="3" required
+                      placeholder="Detail the issue reported by customer, inverter error codes, or physical damage observations..."></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light border btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm">Lodge Ticket</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

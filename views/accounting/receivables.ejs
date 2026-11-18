@@ -1,0 +1,86 @@
+<%- include('../partials/page-header', {
+  heading: 'Accounts Receivable (AR) Ledger',
+  subheading: 'Outstanding customer balances on solar contracts, installment schedules, and credit sales.',
+  actions: [
+    { label: 'Export CSV', url: '/accounting/receivables?format=csv', icon: 'bi-file-earmark-spreadsheet', class: 'btn-outline-success' },
+    { label: 'Collection Calendar', url: '/installments/calendar', icon: 'bi-calendar-event', class: 'btn-outline-secondary' }
+  ]
+}) %>
+
+<!-- Summary Ribbon -->
+<div class="row g-3 mb-4">
+  <div class="col-12 col-md-4">
+    <div class="card app-card p-3 border-primary-subtle bg-primary-subtle">
+      <div class="small text-primary-emphasis text-uppercase fw-semibold">Total Accounts Receivable</div>
+      <div class="fs-4 fw-bold text-primary"><%= formatPKR(receivables.totalReceivablePaisa) %></div>
+      <div class="small text-primary-emphasis"><%= receivables.rows.length %> Customers with open balances</div>
+    </div>
+  </div>
+</div>
+
+<!-- Receivables Listing Table -->
+<div class="card app-card shadow-sm mb-4">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0 app-table">
+      <thead class="table-light">
+        <tr>
+          <th>Customer</th>
+          <th>Contact &amp; City</th>
+          <th class="text-end">Total Billed</th>
+          <th class="text-end">Total Paid</th>
+          <th class="text-end">Balance Due</th>
+          <th class="text-center">Days Overdue</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (receivables.rows && receivables.rows.length) { %>
+          <% receivables.rows.forEach(function(r) { %>
+            <tr>
+              <td>
+                <div class="fw-bold text-dark"><%= r.customer ? r.customer.name : 'Customer' %></div>
+                <div class="small text-muted font-monospace"><%= r.customer ? r.customer.code : '' %></div>
+              </td>
+              <td>
+                <div><%= r.customer ? r.customer.phone : '—' %></div>
+                <div class="small text-muted"><%= r.customer ? (r.customer.area ? r.customer.area + ', ' : '') + (r.customer.city || '') : '—' %></div>
+              </td>
+              <td class="text-end font-monospace text-muted"><%= formatPKR(r.totalBilledPaisa) %></td>
+              <td class="text-end font-monospace text-success"><%= formatPKR(r.totalPaidPaisa) %></td>
+              <td class="text-end font-monospace fw-bold text-danger"><%= formatPKR(r.balanceDuePaisa) %></td>
+              <td class="text-center">
+                <% if (r.daysOverdue > 0) { %>
+                  <span class="badge <%= r.daysOverdue > 60 ? 'bg-danger' : (r.daysOverdue > 30 ? 'bg-warning text-dark' : 'bg-secondary') %>">
+                    <%= r.daysOverdue %>d
+                  </span>
+                <% } else { %>
+                  <span class="badge bg-success-subtle text-success">Current</span>
+                <% } %>
+              </td>
+              <td class="text-end">
+                <% if (r.customer) { %>
+                  <a href="/customers/<%= r.customer._id %>" class="btn btn-sm btn-outline-secondary py-1 px-2" title="View Customer Profile & Ledger">
+                    <i class="bi bi-person-lines-fill"></i>
+                  </a>
+                <% } %>
+              </td>
+            </tr>
+          <% }); %>
+        <% } else { %>
+          <tr>
+            <td colspan="7" class="text-center py-5 text-muted">
+              All customer accounts are completely settled. No outstanding receivables.
+            </td>
+          </tr>
+        <% } %>
+      </tbody>
+      <tfoot class="table-light fw-bold font-monospace">
+        <tr>
+          <td colspan="4">PORTFOLIO TOTAL RECEIVABLE</td>
+          <td class="text-end text-danger fs-6"><%= formatPKR(receivables.totalReceivablePaisa) %></td>
+          <td colspan="2"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>

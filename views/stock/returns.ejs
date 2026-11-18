@@ -1,0 +1,161 @@
+<%- include('../partials/page-header', {
+  heading: 'Supplier returns',
+  subheading: 'Send stock back to a supplier with a reason. Serialised units must be selected by serial number.',
+  actions: [
+    { label: 'Back to ledger', url: '/stock', icon: 'bi-arrow-left', class: 'btn-outline-secondary' }
+  ]
+}) %>
+
+<div class="row g-3 g-lg-4 mt-1">
+  <div class="col-12 col-xl-5">
+    <div class="card app-card">
+      <div class="card-body p-4">
+        <%- include('../partials/form-errors') %>
+
+        <form method="POST" action="<%= formAction %>" data-return-form data-once novalidate>
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+          <div class="mb-3">
+            <label for="supplier" class="form-label">Supplier <span class="text-danger">*</span></label>
+            <select class="form-select" id="supplier" name="supplier" required>
+              <option value="">Select a supplier…</option>
+              <% suppliers.forEach(function (supplier) { %>
+                <option value="<%= supplier._id %>"<%= old('supplier') === String(supplier._id) ? 'selected' : '' %>>
+                  <%= supplier.name %><%= supplier.company ? ' — ' + supplier.company : '' %>
+                </option>
+              <% }); %>
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label for="item" class="form-label">Item <span class="text-danger">*</span></label>
+            <select class="form-select" id="item" name="item" required data-return-item>
+              <option value="">Select an item…</option>
+              <% items.forEach(function (item) { %>
+                <option value="<%= item._id %>"
+                        data-serial="<%= item.hasSerial ? '1' : '0' %>"
+                        data-stock="<%= item.currentStock %>"
+                        data-unit="<%= item.unit %>"
+                        data-sku="<%= item.sku %>"
+                        <%= old('item') === String(item._id) ? 'selected' : '' %>>
+                  <%= item.sku %> — <%= item.name %> (<%= formatQty(item.currentStock) %> <%= item.unit %>)
+                </option>
+              <% }); %>
+            </select>
+            <div class="form-text" data-return-hint>Current on-hand quantity is shown in brackets.</div>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-6">
+              <label for="qty" class="form-label">Quantity <span class="text-danger">*</span></label>
+              <input type="number" class="form-control" id="qty" name="qty" min="0.0001" step="any"
+                     value="<%= old('qty') %>" inputmode="decimal" placeholder="0" required data-return-qty>
+            </div>
+            <div class="col-6">
+              <label for="location" class="form-label">Location</label>
+              <input type="text" class="form-control" id="location" name="location"
+                     value="<%= old('location') %>" maxlength="100" placeholder="Main warehouse">
+            </div>
+          </div>
+
+          <div class="mt-3 d-none" data-return-serial-wrap>
+            <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-1">
+              <label for="serials" class="form-label mb-0">Serial numbers</label>
+              <div class="d-flex flex-wrap gap-2 align-items-center">
+                <span class="badge text-bg-light border" data-serial-count data-serial-count-for="return">0 entered</span>
+                <label class="btn btn-sm btn-outline-secondary mb-0">
+                  <i class="bi bi-upload me-1"></i>Import CSV
+                  <input type="file" accept=".csv,.txt" class="d-none" data-serial-file data-serial-target="serials">
+                </label>
+              </div>
+            </div>
+            <textarea class="form-control font-monospace" id="serials" name="serials" rows="4"
+                      placeholder="One serial per line, or paste a CSV column"
+                      data-serial-input data-serial-expected="return"><%= old('serials') %></textarea>
+            <div class="form-text">Exactly the returned quantity is required. Only in-stock or defective serials can be returned.</div>
+          </div>
+
+          <div class="mb-3 mt-3">
+            <label for="reason" class="form-label">Reason <span class="text-danger">*</span></label>
+            <textarea class="form-control" id="reason" name="reason" rows="3" maxlength="300" required
+                      placeholder="Warranty replacement, wrong model supplied, damaged unit…"><%= old('reason') %></textarea>
+          </div>
+
+          <div class="alert alert-light border small" data-return-preview>
+            Select an item to see the resulting balance.
+          </div>
+
+          <div class="d-flex justify-content-end gap-2">
+            <a href="/stock" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-warning">
+              <i class="bi bi-arrow-return-left me-1"></i>Return to supplier
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-7">
+    <div class="card app-card">
+      <div class="card-header bg-transparent d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <h2 class="h6 fw-semibold mb-0">Recent supplier returns</h2>
+        <a href="/stock?type=RETURN" class="btn btn-sm btn-outline-secondary">Open in ledger</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle app-table mb-0">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Item</th>
+              <th>Supplier</th>
+              <th class="text-end">Qty</th>
+              <th class="text-end">Balance</th>
+              <th>Reference</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!recent.length) { %>
+              <tr><td colspan="7" class="text-center py-4 text-muted">No supplier returns have been posted yet.</td></tr>
+            <% } else { %>
+              <% recent.forEach(function (movement) { %>
+                <tr>
+                  <td class="small text-muted"><%= formatDate(movement.occurredAt) %></td>
+                  <td class="small">
+                    <% if (movement.item) { %>
+                      <a href="/items/<%= movement.item._id %>" class="text-decoration-none"><%= movement.item.sku %></a>
+                      <div class="text-muted"><%= movement.item.name %></div>
+                    <% } else { %>—<% } %>
+                  </td>
+                  <td class="small">
+                    <% if (movement.supplier) { %>
+                      <a href="/suppliers/<%= movement.supplier._id %>" class="text-decoration-none"><%= movement.supplier.name %></a>
+                    <% } else { %>—<% } %>
+                  </td>
+                  <td class="text-end small fw-semibold text-danger"><%= formatQty(movement.qty) %></td>
+                  <td class="text-end small"><%= formatQty(movement.balanceAfter) %></td>
+                  <td class="small font-monospace"><%= movement.reference || '—' %></td>
+                  <td class="small text-muted"><%= movement.notes || '—' %></td>
+                </tr>
+              <% }); %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card app-card bg-light-subtle mt-3">
+      <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">What happens on submit</h2></div>
+      <div class="card-body small text-muted">
+        <ul class="ps-3 mb-0">
+          <li class="mb-2">A signed <strong>RETURN</strong> movement removes the quantity from stock.</li>
+          <li class="mb-2">Serialised units move to the <strong>Returned</strong> serial status and keep their event history.</li>
+          <li class="mb-0">The return is recorded against the supplier so the payable conversation stays traceable.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/inventory.js"></script>

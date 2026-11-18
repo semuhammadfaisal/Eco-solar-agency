@@ -1,0 +1,12 @@
+<% if (typeof formErrors !== 'undefined' && formErrors && formErrors.length) { %>
+  <div class="alert alert-danger app-alert" role="alert">
+    <div class="fw-semibold mb-1">
+      <i class="bi bi-exclamation-octagon-fill me-1"></i>Please fix the following:
+    </div>
+    <ul class="mb-0 ps-3 small">
+      <% formErrors.forEach(function (message) { %>
+        <li><%= message %></li>
+      <% }); %>
+    </ul>
+  </div>
+<% } %>

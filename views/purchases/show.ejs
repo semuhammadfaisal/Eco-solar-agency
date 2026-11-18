@@ -1,0 +1,340 @@
+<%
+  var canReceive = canManage && purchase.status !== 'received' && purchase.status !== 'cancelled' && !purchase.isFullyReceived;
+  var canEdit = canManage && purchase.status === 'ordered' && !(purchase.receipts && purchase.receipts.length);
+  var canCancel = canManage && purchase.status === 'ordered' && !(purchase.receipts && purchase.receipts.length);
+
+  var headerActions = [];
+  if (canReceive) {
+    headerActions.push({ label: 'Receive stock', url: '/purchases/' + purchase._id + '/receive', icon: 'bi-box-arrow-in-down', class: 'btn-primary' });
+  }
+  if (canEdit) {
+    headerActions.push({ label: 'Edit', url: '/purchases/' + purchase._id + '/edit', icon: 'bi-pencil', class: 'btn-outline-secondary' });
+  }
+  headerActions.push({ label: 'Back to purchases', url: '/purchases', icon: 'bi-arrow-left', class: 'btn-outline-secondary' });
+
+  var lineById = {};
+  (purchase.items || []).forEach(function (line) {
+    lineById[String(line.item && line.item._id ? line.item._id : line.item)] = line;
+  });
+%>
+
+<%- include('../partials/page-header', {
+  heading: purchase.number,
+  subheading: (purchase.supplier ? purchase.supplier.name : 'Supplier removed') + ' · ' + formatDate(purchase.purchaseDate),
+  actions: headerActions
+}) %>
+
+<div class="row g-3 mt-1">
+  <div class="col-6 col-lg-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-primary-subtle text-primary"><i class="bi bi-receipt"></i></span>
+      <div class="stat-value"><%= formatPKR(purchase.totalPaisa) %></div>
+      <div class="stat-label">Order total</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-success-subtle text-success"><i class="bi bi-check2-square"></i></span>
+      <div class="stat-value"><%= formatPKR(purchase.paidPaisa) %></div>
+      <div class="stat-label">Paid to supplier</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-danger-subtle text-danger"><i class="bi bi-wallet2"></i></span>
+      <div class="stat-value <%= purchase.outstandingPaisa > 0 ? 'text-danger' : 'text-success' %>"><%= formatPKR(purchase.outstandingPaisa) %></div>
+      <div class="stat-label">Outstanding</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-info-subtle text-info-emphasis"><i class="bi bi-boxes"></i></span>
+      <div class="stat-value"><%= formatQty(purchase.receivedUnits) %> / <%= formatQty(purchase.orderedUnits) %></div>
+      <div class="stat-label">Units received</div>
+    </div></div>
+  </div>
+</div>
+
+<div class="row g-3 mt-1">
+  <div class="col-12 col-xl-8">
+    <div class="card app-card">
+      <div class="card-header bg-transparent d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <h2 class="h6 fw-semibold mb-0">Order summary</h2>
+        <div class="d-flex flex-wrap gap-2">
+          <span class="badge text-bg-<%= inventory.PURCHASE_STATUS_BADGES[purchase.status] || 'secondary' %>">
+            <%= inventory.PURCHASE_STATUS_LABELS[purchase.status] || purchase.status %>
+          </span>
+          <span class="badge text-bg-<%= inventory.PAYMENT_STATUS_BADGES[purchase.paymentStatus] || 'secondary' %>">
+            <%= inventory.PAYMENT_STATUS_LABELS[purchase.paymentStatus] || purchase.paymentStatus %>
+          </span>
+        </div>
+      </div>
+      <div class="card-body p-4">
+        <dl class="row mb-0 small">
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Supplier</dt>
+          <dd class="col-7 col-sm-8">
+            <% if (purchase.supplier) { %>
+              <a href="/suppliers/<%= purchase.supplier._id %>" class="text-decoration-none"><%= purchase.supplier.name %></a>
+              <span class="text-muted font-monospace">· <%= purchase.supplier.code %></span>
+            <% } else { %>
+              <span class="text-muted">—</span>
+            <% } %>
+          </dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Supplier invoice</dt>
+          <dd class="col-7 col-sm-8"><%= purchase.invoiceNo || '—' %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Purchase date</dt>
+          <dd class="col-7 col-sm-8"><%= formatDate(purchase.purchaseDate) %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Raised by</dt>
+          <dd class="col-7 col-sm-8"><%= purchase.createdBy ? purchase.createdBy.name : 'System' %></dd>
+
+          <% if (purchase.supplier) { %>
+            <dt class="col-5 col-sm-4 text-muted fw-normal">Supplier contact</dt>
+            <dd class="col-7 col-sm-8">
+              <%= purchase.supplier.contactName || '—' %>
+              <%= purchase.supplier.phone ? ' · ' + purchase.supplier.phone : '' %>
+            </dd>
+          <% } %>
+        </dl>
+
+        <% if (purchase.notes) { %>
+          <hr class="my-4">
+          <h3 class="h6 fw-semibold text-uppercase text-muted mb-2">Notes</h3>
+          <p class="small mb-0" style="white-space:pre-line"><%= purchase.notes %></p>
+        <% } %>
+      </div>
+    </div>
+
+    <div class="card app-card mt-3">
+      <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">Purchase lines</h2></div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle app-table mb-0">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th class="text-end">Ordered</th>
+              <th class="text-end">Received</th>
+              <th class="text-end">Remaining</th>
+              <th class="text-end">Unit cost</th>
+              <th class="text-end">Line total</th>
+              <th class="text-end">Serials</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!purchase.items || !purchase.items.length) { %>
+              <tr><td colspan="7" class="text-center py-4 text-muted">No lines on this order.</td></tr>
+            <% } else { %>
+              <% purchase.items.forEach(function (line) { 
+                   var remaining = Math.max(0, Number(line.qty || 0) - Number(line.receivedQty || 0));
+                   var lineSerials = serialsByLine && serialsByLine.get(String(line.item)) ? serialsByLine.get(String(line.item)) : [];
+                   var lineTotal = Math.round(Number(line.qty || 0) * Number(line.unitCostPaisa || 0));
+              %>
+                <tr>
+                  <td>
+                    <a href="/items/<%= line.item %>" class="fw-semibold text-decoration-none"><%= line.name || line.sku %></a>
+                    <div class="text-muted small">
+                      <span class="font-monospace"><%= line.sku %></span>
+                      <% if (line.hasSerial) { %><span class="badge text-bg-info-subtle text-info-emphasis ms-1">Serial</span><% } %>
+                    </div>
+                  </td>
+                  <td class="text-end small"><%= formatQty(line.qty) %> <span class="text-muted"><%= line.unit %></span></td>
+                  <td class="text-end small"><%= formatQty(line.receivedQty) %></td>
+                  <td class="text-end small <%= remaining > 0 ? 'text-warning-emphasis fw-semibold' : 'text-success' %>"><%= formatQty(remaining) %></td>
+                  <td class="text-end small"><%= formatPKR(line.unitCostPaisa) %></td>
+                  <td class="text-end small fw-semibold"><%= formatPKR(lineTotal) %></td>
+                  <td class="text-end small"><%= formatQty(lineSerials.length) %></td>
+                </tr>
+              <% }); %>
+            <% } %>
+          </tbody>
+          <tfoot>
+            <tr>
+              <th colspan="5" class="text-end text-uppercase small text-muted">Total</th>
+              <th class="text-end"><%= formatPKR(purchase.totalPaisa) %></th>
+              <th></th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div class="card app-card mt-3">
+      <div class="card-header bg-transparent d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <h2 class="h6 fw-semibold mb-0">Goods received notes</h2>
+        <span class="badge text-bg-light border"><%= (purchase.receipts || []).length %> receipt<%= (purchase.receipts || []).length === 1 ? '' : 's' %></span>
+      </div>
+      <div class="card-body p-0">
+        <% if (!purchase.receipts || !purchase.receipts.length) { %>
+          <p class="text-muted small text-center py-4 mb-0">No stock has been received against this order yet.</p>
+        <% } else { %>
+          <% purchase.receipts.forEach(function (receipt) { %>
+            <div class="border-bottom p-3">
+              <div class="d-flex flex-wrap gap-2 justify-content-between align-items-start">
+                <div>
+                  <span class="fw-semibold font-monospace"><%= receipt.number %></span>
+                  <span class="text-muted small ms-2"><%= formatDateTime(receipt.receivedAt) %></span>
+                  <div class="small text-muted">
+                    Received by <%= receipt.receivedBy ? receipt.receivedBy.name : 'System' %>
+                    <% if (receipt.notes) { %> · <%= receipt.notes %><% } %>
+                  </div>
+                </div>
+                <span class="badge text-bg-success"><%= (receipt.lines || []).length %> line<%= (receipt.lines || []).length === 1 ? '' : 's' %></span>
+              </div>
+              <div class="table-responsive mt-2">
+                <table class="table table-sm align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th class="small text-muted">Item</th>
+                      <th class="text-end small text-muted">Qty</th>
+                      <th class="text-end small text-muted">Unit cost</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% (receipt.lines || []).forEach(function (receiptLine) { 
+                         var original = lineById[String(receiptLine.item)];
+                    %>
+                      <tr>
+                        <td class="small"><%= original ? original.sku + ' — ' + original.name : String(receiptLine.item) %></td>
+                        <td class="text-end small"><%= formatQty(receiptLine.qty) %></td>
+                        <td class="text-end small"><%= formatPKR(receiptLine.unitCostPaisa) %></td>
+                      </tr>
+                    <% }); %>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          <% }); %>
+        <% } %>
+      </div>
+    </div>
+
+    <div class="card app-card mt-3">
+      <div class="card-header bg-transparent d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <h2 class="h6 fw-semibold mb-0">Serial numbers from this order</h2>
+        <a href="/serials?search=" class="btn btn-sm btn-outline-secondary">Serial search</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle app-table mb-0">
+          <thead>
+            <tr>
+              <th>Serial</th>
+              <th>Item</th>
+              <th>Status</th>
+              <th>Customer</th>
+              <th>Received</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!serials.length) { %>
+              <tr><td colspan="5" class="text-center py-4 text-muted">No serials have been captured for this order.</td></tr>
+            <% } else { %>
+              <% serials.forEach(function (serial) { %>
+                <tr>
+                  <td class="font-monospace small"><a href="/serials/<%= serial._id %>" class="text-decoration-none"><%= serial.serial %></a></td>
+                  <td class="small"><%= serial.item ? serial.item.sku + ' — ' + serial.item.name : '—' %></td>
+                  <td><span class="badge text-bg-<%= inventory.SERIAL_STATUS_BADGES[serial.status] || 'secondary' %>"><%= inventory.SERIAL_STATUS_LABELS[serial.status] || serial.status %></span></td>
+                  <td class="small text-muted"><%= serial.customer ? serial.customer.name : '—' %></td>
+                  <td class="small text-muted"><%= formatDate(serial.createdAt) %></td>
+                </tr>
+              <% }); %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-4">
+    <div class="card app-card">
+      <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">Payment</h2></div>
+      <div class="card-body">
+        <div class="d-flex justify-content-between py-1 small"><span class="text-muted">Order total</span><span><%= formatPKR(purchase.totalPaisa) %></span></div>
+        <div class="d-flex justify-content-between py-1 small"><span class="text-muted">Paid</span><span>− <%= formatPKR(purchase.paidPaisa) %></span></div>
+        <hr>
+        <div class="d-flex justify-content-between fw-semibold mb-3"><span>Outstanding</span><span><%= formatPKR(purchase.outstandingPaisa) %></span></div>
+
+        <% if (canPay && purchase.status !== 'cancelled' && purchase.outstandingPaisa > 0) { %>
+          <form method="POST" action="/purchases/<%= purchase._id %>/payments" class="row g-2" data-once>
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <div class="col-12">
+              <label for="amount" class="form-label small text-muted mb-1">Record a payment (PKR)</label>
+              <input type="text" class="form-control" id="amount" name="amount" inputmode="decimal"
+                     placeholder="0.00" required>
+            </div>
+            <div class="col-12">
+              <button type="submit" class="btn btn-success w-100">
+                <i class="bi bi-cash-coin me-1"></i>Add payment
+              </button>
+            </div>
+            <div class="col-12">
+              <div class="form-text">Payments cannot exceed the outstanding balance.</div>
+            </div>
+          </form>
+        <% } else if (purchase.outstandingPaisa > 0) { %>
+          <div class="alert alert-warning small mb-0">
+            <i class="bi bi-lock me-1"></i>You do not have permission to record payments.
+          </div>
+        <% } else { %>
+          <div class="alert alert-success small mb-0">
+            <i class="bi bi-check2-circle me-1"></i>This purchase is fully paid.
+          </div>
+        <% } %>
+      </div>
+    </div>
+
+    <div class="card app-card mt-3">
+      <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">Receiving progress</h2></div>
+      <div class="card-body">
+        <% var pct = purchase.orderedUnits > 0 ? Math.min(100, Math.round((Number(purchase.receivedUnits || 0) / Number(purchase.orderedUnits)) * 100)) : 0; %>
+        <div class="d-flex justify-content-between small mb-1">
+          <span class="text-muted">Units received</span>
+          <span class="fw-semibold"><%= pct %>%</span>
+        </div>
+        <div class="progress" style="height:8px" role="progressbar" aria-valuenow="<%= pct %>" aria-valuemin="0" aria-valuemax="100">
+          <div class="progress-bar <%= pct === 100 ? 'bg-success' : 'bg-warning' %>" style="width:<%= pct %>%"></div>
+        </div>
+        <p class="small text-muted mt-3 mb-0">
+          <%= formatQty(purchase.receivedUnits) %> of <%= formatQty(purchase.orderedUnits) %> units received
+          across <%= (purchase.receipts || []).length %> GRN<%= (purchase.receipts || []).length === 1 ? '' : 's' %>.
+        </p>
+      </div>
+    </div>
+
+    <div class="card app-card mt-3">
+      <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">Quick actions</h2></div>
+      <div class="list-group list-group-flush">
+        <% if (purchase.supplier) { %>
+          <a href="/suppliers/<%= purchase.supplier._id %>" class="list-group-item list-group-item-action">
+            <i class="bi bi-truck me-2 text-muted"></i>Open supplier
+          </a>
+        <% } %>
+        <a href="/purchases?supplier=<%= purchase.supplier ? purchase.supplier._id : '' %>" class="list-group-item list-group-item-action">
+          <i class="bi bi-funnel me-2 text-muted"></i>Purchases from this supplier
+        </a>
+        <% if (canReceive) { %>
+          <a href="/purchases/<%= purchase._id %>/receive" class="list-group-item list-group-item-action">
+            <i class="bi bi-box-arrow-in-down me-2 text-muted"></i>Receive stock (GRN)
+          </a>
+        <% } %>
+      </div>
+    </div>
+
+    <% if (canCancel) { %>
+      <div class="card app-card border-danger-subtle mt-3">
+        <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0 text-danger">Danger zone</h2></div>
+        <div class="card-body">
+          <p class="small text-muted">Cancelling is only possible before any stock is received.</p>
+          <form method="POST" action="/purchases/<%= purchase._id %>/cancel"
+                onsubmit="return confirm('Cancel this purchase order? This cannot be undone.');">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button type="submit" class="btn btn-outline-danger btn-sm">
+              <i class="bi bi-x-octagon me-1"></i>Cancel purchase order
+            </button>
+          </form>
+        </div>
+      </div>
+    <% } %>
+  </div>
+</div>

@@ -1,0 +1,654 @@
+<%
+  var planStatusBadge = installments.PLAN_STATUS_BADGES[plan.status] || 'secondary';
+  var planStatusLabel = installments.PLAN_STATUS_LABELS[plan.status] || plan.status;
+  var customer = plan.customer || {};
+  var sc = plan.securityChecklist || {};
+  var isOverridden = sc.ownerOverride && sc.ownerOverride.isOverridden;
+  var isMaterialAllowed = sc.isComplete || isOverridden;
+%>
+
+<%- include('../partials/page-header', {
+  heading: plan.planNumber + ' — ' + (customer.name || 'Customer Plan'),
+  subheading: formatPKR(plan.totalPayablePaisa) + ' Financed (' + plan.installmentCount + ' × ' + (installments.FREQUENCY_LABELS[plan.frequency] || plan.frequency) + ') · Started ' + formatDate(plan.startDate),
+  actions: [
+    ...(canCollect && plan.status !== 'completed' ? [{ label: 'Collect payment', url: '#collectPaymentModal', icon: 'bi-cash-coin', class: 'btn-primary', extra: 'data-bs-toggle="modal" data-bs-target="#collectPaymentModal"' }] : []),
+    { label: 'Customer ledger', url: '/installments/ledger/' + customer._id, icon: 'bi-journal-text', class: 'btn-outline-primary' },
+    { label: 'Statement PDF', url: '/installments/ledger/' + customer._id + '/pdf', icon: 'bi-file-earmark-pdf', class: 'btn-outline-secondary', target: '_blank' },
+    ...(canReschedule && plan.status !== 'completed' ? [{ label: 'Reschedule', url: '#rescheduleModal', icon: 'bi-arrow-clockwise', class: 'btn-outline-warning', extra: 'data-bs-toggle="modal" data-bs-target="#rescheduleModal"' }] : []),
+    { label: 'Back to plans', url: '/installments', icon: 'bi-arrow-left', class: 'btn-outline-secondary' }
+  ]
+}) %>
+
+<!-- Recovery Watch Banner -->
+<% if (plan.isFlaggedForRecovery) { %>
+  <div class="alert alert-danger border-danger shadow-sm mt-2 mb-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <div>
+        <div class="fw-bold d-flex align-items-center gap-2">
+          <i class="bi bi-shield-exclamation fs-5"></i>
+          <span>ACCOUNT FLAGGED FOR RECOVERY WATCH</span>
+        </div>
+        <div class="small text-danger-emphasis mt-1">
+          <%= plan.recoveryFlagNotes || 'A security instrument or cheque bounced, or installment is critically delinquent.' %>
+          <% if (plan.recoveryFlaggedAt) { %> (Flagged on <%= formatDate(plan.recoveryFlaggedAt) %>)<% } %>
+        </div>
+      </div>
+      <span class="badge text-bg-danger">CRITICAL RECOVERY</span>
+    </div>
+  </div>
+<% } %>
+
+<!-- Financial Summary Ribbon -->
+<div class="row g-2 mb-3 mt-1">
+  <div class="col-6 col-lg-3">
+    <div class="card app-card border-primary-subtle text-center p-3 h-100">
+      <div class="text-uppercase small text-muted fw-semibold">Total Payable</div>
+      <div class="display-6 fw-bold text-dark"><%= formatPKR(plan.totalPayablePaisa) %></div>
+      <div class="small text-muted">Financed: <%= formatPKR(plan.financedAmountPaisa) %> + Markup: <%= formatPKR(plan.markupPaisa) %></div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card border-secondary-subtle text-center p-3 h-100">
+      <div class="text-uppercase small text-muted fw-semibold">Down Payment</div>
+      <div class="display-6 fw-bold text-secondary"><%= formatPKR(plan.downPaymentPaisa) %></div>
+      <div class="small text-success fw-medium"><i class="bi bi-check-circle-fill me-1"></i>Settled on booking</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card border-success-subtle text-center p-3 h-100">
+      <div class="text-uppercase small text-muted fw-semibold">Recovered Capital</div>
+      <div class="display-6 fw-bold text-success"><%= formatPKR(plan.totalPaidPaisa) %></div>
+      <div class="small text-muted"><%= plan.totalPayablePaisa ? Math.round((plan.totalPaidPaisa / plan.totalPayablePaisa) * 100) : 0 %>% of total contract recovered</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card border-danger-subtle text-center p-3 h-100">
+      <div class="text-uppercase small text-muted fw-semibold">Outstanding Balance</div>
+      <div class="display-6 fw-bold text-danger"><%= formatPKR(plan.remainingBalancePaisa) %></div>
+      <div class="small text-muted"><%= plan.installmentCount %> Monthly Tranches</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <!-- Customer & Sale Profile Card -->
+  <div class="col-12 col-lg-6">
+    <div class="card app-card h-100">
+      <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
+        <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+          <i class="bi bi-person-badge"></i> Customer &amp; Contract Details
+        </h3>
+        <% if (customer._id) { %>
+          <a href="/customers/<%= customer._id %>" class="btn btn-sm btn-outline-secondary">View Profile</a>
+        <% } %>
+      </div>
+      <div class="card-body p-3 p-md-4">
+        <dl class="row mb-0 small">
+          <dt class="col-4 text-muted fw-normal">Customer Name</dt>
+          <dd class="col-8 fw-semibold"><%= customer.name %> (<%= customer.code %>)</dd>
+
+          <dt class="col-4 text-muted fw-normal">Phone / Mobile</dt>
+          <dd class="col-8"><%= customer.phone %></dd>
+
+          <dt class="col-4 text-muted fw-normal">Address / City</dt>
+          <dd class="col-8"><%= [customer.address, customer.city].filter(Boolean).join(', ') || '—' %></dd>
+
+          <dt class="col-4 text-muted fw-normal">Sale Reference</dt>
+          <dd class="col-8">
+            <% if (plan.sale) { %>
+              <a href="/projects/<%= plan.sale._id || plan.sale %>" class="font-monospace fw-semibold">
+                <%= plan.sale.saleNumber || 'Sale' %>
+              </a>
+            <% } else { %>—<% } %>
+          </dd>
+
+          <dt class="col-4 text-muted fw-normal">Collection Officer</dt>
+          <dd class="col-8"><%= plan.assignedOfficer ? plan.assignedOfficer.name : 'General Queue' %></dd>
+
+          <dt class="col-4 text-muted fw-normal">Grace Period</dt>
+          <dd class="col-8"><%= plan.lateFeeRule ? plan.lateFeeRule.graceDays : 5 %> Days (Late fee: <%= formatPKR(plan.lateFeeRule ? plan.lateFeeRule.amountPaisa : 50000) %>)</dd>
+
+          <dt class="col-4 text-muted fw-normal">Plan Status</dt>
+          <dd class="col-8">
+            <span class="badge text-bg-<%= planStatusBadge %>"><%= planStatusLabel %></span>
+          </dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <!-- Security Checklist & Material Issue Gate Card -->
+  <div class="col-12 col-lg-6">
+    <div class="card app-card h-100">
+      <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
+        <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+          <i class="bi bi-shield-check"></i> Security Document Checklist &amp; Gate
+        </h3>
+        <span class="badge text-bg-<%= isMaterialAllowed ? 'success' : 'danger' %>">
+          <%= isMaterialAllowed ? 'Material Release Allowed' : 'Material Issue Blocked' %>
+        </span>
+      </div>
+      <div class="card-body p-3 p-md-4">
+        <!-- Checklist items form -->
+        <form method="POST" action="/installments/<%= plan._id %>/checklist">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+          <div class="row g-2 small mb-3">
+            <div class="col-12 col-sm-6">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="stampAgreement" id="c_stamp" value="true"
+                       <%= sc.stampAgreement && sc.stampAgreement.submitted ? 'checked' : '' %>>
+                <label class="form-check-label" for="c_stamp">1. Stamp Agreement Paper</label>
+              </div>
+            </div>
+            <div class="col-12 col-sm-6">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="customerCnicCopy" id="c_ccnic" value="true"
+                       <%= sc.customerCnicCopy && sc.customerCnicCopy.submitted ? 'checked' : '' %>>
+                <label class="form-check-label" for="c_ccnic">2. Customer CNIC Copy</label>
+              </div>
+            </div>
+            <div class="col-12 col-sm-6">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="guarantorCnicCopy" id="c_gcnic" value="true"
+                       <%= sc.guarantorCnicCopy && sc.guarantorCnicCopy.submitted ? 'checked' : '' %>>
+                <label class="form-check-label" for="c_gcnic">3. Guarantor CNIC Copy</label>
+              </div>
+            </div>
+            <div class="col-12 col-sm-6">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="utilityBillCopy" id="c_bill" value="true"
+                       <%= sc.utilityBillCopy && sc.utilityBillCopy.submitted ? 'checked' : '' %>>
+                <label class="form-check-label" for="c_bill">4. Utility Electricity Bill</label>
+              </div>
+            </div>
+            <div class="col-12 col-sm-6">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="promissoryNote" id="c_prom" value="true"
+                       <%= sc.promissoryNote && sc.promissoryNote.submitted ? 'checked' : '' %>>
+                <label class="form-check-label" for="c_prom">5. Signed Promissory Note</label>
+              </div>
+            </div>
+            <div class="col-12 col-sm-6">
+              <div class="d-flex align-items-center gap-2">
+                <div class="form-check mb-0">
+                  <input class="form-check-input" type="checkbox" name="postDatedCheques" id="c_cheques" value="true"
+                         <%= sc.postDatedCheques && sc.postDatedCheques.submitted ? 'checked' : '' %>>
+                  <label class="form-check-label" for="c_cheques">6. Post-Dated Cheques</label>
+                </div>
+                <input type="number" class="form-control form-control-sm" style="width: 60px;" name="postDatedChequesCount"
+                       value="<%= sc.postDatedCheques ? sc.postDatedCheques.count : 0 %>" min="0">
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center">
+            <button type="submit" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-save me-1"></i>Save Checklist
+            </button>
+            <span class="small text-muted">
+              <% if (sc.isComplete) { %>
+                <i class="bi bi-check-circle-fill text-success me-1"></i>Verified complete by <%= sc.completedBy ? sc.completedBy.name : 'Staff' %>
+              <% } else { %>
+                <i class="bi bi-exclamation-circle text-danger me-1"></i>Documents pending
+              <% } %>
+            </span>
+          </div>
+        </form>
+
+        <!-- Owner Override Notice / Button -->
+        <hr class="my-3">
+        <% if (isOverridden) { %>
+          <div class="alert alert-warning py-2 px-3 mb-0 small">
+            <i class="bi bi-shield-lock-fill me-1 text-warning-emphasis"></i>
+            <strong>Owner Security Override Active:</strong> "<%= sc.ownerOverride.reason %>"
+            (Granted by <%= sc.ownerOverride.overriddenBy ? sc.ownerOverride.overriddenBy.name : 'Owner' %> on <%= formatDate(sc.ownerOverride.overriddenAt) %>)
+          </div>
+        <% } else if (!sc.isComplete) { %>
+          <div class="d-flex justify-content-between align-items-center">
+            <span class="small text-muted">Checklist incomplete. Material cannot be dispatched.</span>
+            <% if (isOwner) { %>
+              <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#overrideSecurityModal">
+                <i class="bi bi-shield-slash me-1"></i>Owner Override
+              </button>
+            <% } %>
+          </div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Guarantor Profile & Cheques in Vault Cards -->
+<div class="row g-3 mb-3">
+  <!-- Guarantor Card -->
+  <div class="col-12 col-lg-5">
+    <div class="card app-card h-100">
+      <div class="card-header bg-transparent py-3">
+        <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+          <i class="bi bi-person-check"></i> Guarantor Profile
+        </h3>
+      </div>
+      <div class="card-body p-3 p-md-4">
+        <% var g = plan.guarantor || {}; %>
+        <% if (g.name) { %>
+          <dl class="row mb-0 small">
+            <dt class="col-4 text-muted fw-normal">Name</dt>
+            <dd class="col-8 fw-semibold"><%= g.name %></dd>
+
+            <dt class="col-4 text-muted fw-normal">CNIC</dt>
+            <dd class="col-8 font-monospace"><%= g.cnic || '—' %></dd>
+
+            <dt class="col-4 text-muted fw-normal">Phone</dt>
+            <dd class="col-8"><%= g.phone || '—' %></dd>
+
+            <dt class="col-4 text-muted fw-normal">Relation</dt>
+            <dd class="col-8"><%= g.relation || '—' %></dd>
+
+            <dt class="col-4 text-muted fw-normal">Workplace</dt>
+            <dd class="col-8"><%= g.workplace || '—' %></dd>
+
+            <dt class="col-4 text-muted fw-normal">Address</dt>
+            <dd class="col-8"><%= g.address || '—' %></dd>
+          </dl>
+        <% } else { %>
+          <div class="text-muted small py-3 text-center">No guarantor registered for this financing plan.</div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <!-- Post-Dated Cheques in Vault -->
+  <div class="col-12 col-lg-7">
+    <div class="card app-card h-100">
+      <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
+        <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+          <i class="bi bi-journal-check"></i> Post-Dated Cheques in Vault (<%= plan.cheques ? plan.cheques.length : 0 %>)
+        </h3>
+        <a href="/installments/cheques" class="btn btn-sm btn-outline-secondary">Open Vault</a>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive" style="max-height: 220px; overflow-y: auto;">
+          <table class="table table-hover align-middle mb-0 app-table">
+            <thead class="table-light">
+              <tr>
+                <th>Cheque #</th>
+                <th>Bank</th>
+                <th>Maturity Date</th>
+                <th class="text-end">Amount</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (plan.cheques && plan.cheques.length) { %>
+                <% plan.cheques.forEach(function (ch) { %>
+                  <tr>
+                    <td class="font-monospace fw-semibold"><%= ch.chequeNumber %></td>
+                    <td class="small"><%= ch.bankName %></td>
+                    <td class="small"><%= formatDate(ch.chequeDate) %></td>
+                    <td class="text-end font-monospace fw-bold"><%= formatPKR(ch.amountPaisa) %></td>
+                    <td>
+                      <span class="badge text-bg-<%= installments.CHEQUE_STATUS_BADGES[ch.status] || 'secondary' %>">
+                        <%= installments.CHEQUE_STATUS_LABELS[ch.status] || ch.status %>
+                      </span>
+                    </td>
+                  </tr>
+                <% }); %>
+              <% } else { %>
+                <tr>
+                  <td colspan="5" class="text-center py-4 text-muted small">No post-dated cheques in vault.</td>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Installments Schedule Table Card -->
+<div class="card app-card mb-3">
+  <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
+    <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+      <i class="bi bi-calendar-event"></i> Installment Tranches &amp; Repayment Schedule
+    </h3>
+    <span class="badge text-bg-light border text-muted">
+      <%= plan.installments ? plan.installments.length : 0 %> Installments
+    </span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0 app-table">
+      <thead class="table-light">
+        <tr>
+          <th style="width: 45px;">#</th>
+          <th>Due Date</th>
+          <th class="text-end" style="width: 140px;">Due Amount</th>
+          <th class="text-end" style="width: 130px;">Paid Amount</th>
+          <th class="text-end" style="width: 120px;">Late Fee</th>
+          <th class="text-end" style="width: 120px;">Waived</th>
+          <th class="text-end" style="width: 140px;">Remaining</th>
+          <th>Status</th>
+          <th class="text-end" style="width: 160px;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% (plan.installments || []).forEach(function (inst) {
+             var instDue = (inst.amountPaisa || 0) + (inst.lateFeeAssessedPaisa || 0);
+             var instSettled = (inst.paidAmountPaisa || 0) + (inst.lateFeePaidPaisa || 0) + (inst.lateFeeWaivedPaisa || 0);
+             var instRem = Math.max(0, instDue - instSettled);
+        %>
+          <tr class="<%= inst.status === 'overdue' ? 'table-danger-subtle' : (inst.status === 'paid' ? 'table-success-subtle' : '') %>">
+            <td class="text-muted small text-center fw-bold"><%= inst.installmentNumber %></td>
+            <td class="small <%= inst.status === 'overdue' ? 'text-danger fw-bold' : '' %>">
+              <%= formatDate(inst.dueDate) %>
+            </td>
+            <td class="text-end font-monospace fw-semibold"><%= formatPKR(inst.amountPaisa) %></td>
+            <td class="text-end font-monospace text-success"><%= formatPKR(inst.paidAmountPaisa) %></td>
+            <td class="text-end font-monospace text-danger small"><%= inst.lateFeeAssessedPaisa ? formatPKR(inst.lateFeeAssessedPaisa) : '—' %></td>
+            <td class="text-end font-monospace text-muted small"><%= inst.lateFeeWaivedPaisa ? formatPKR(inst.lateFeeWaivedPaisa) : '—' %></td>
+            <td class="text-end font-monospace fw-bold <%= instRem > 0 ? 'text-dark' : 'text-muted' %>"><%= formatPKR(instRem) %></td>
+            <td>
+              <span class="badge text-bg-<%= installments.INSTALLMENT_STATUS_BADGES[inst.status] || 'secondary' %>">
+                <%= installments.INSTALLMENT_STATUS_LABELS[inst.status] || inst.status %>
+              </span>
+            </td>
+            <td class="text-end">
+              <div class="btn-group btn-group-sm">
+                <% if (instRem > 0 && canCollect) { %>
+                  <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#collectPaymentModal"
+                          onclick="prefillCollection('<%= instRem / 100 %>')">
+                    Collect
+                  </button>
+                <% } %>
+                <% if (inst.lateFeeAssessedPaisa > (inst.lateFeePaidPaisa + inst.lateFeeWaivedPaisa) && canWaive) { %>
+                  <button type="button" class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#waiveFeeModal"
+                          onclick="prefillWaiver('<%= inst._id %>', '<%= (inst.lateFeeAssessedPaisa - inst.lateFeePaidPaisa - inst.lateFeeWaivedPaisa) / 100 %>')">
+                    Waive Fee
+                  </button>
+                <% } %>
+              </div>
+            </td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Payment Receipts Issued Card -->
+<div class="card app-card mb-3">
+  <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
+    <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+      <i class="bi bi-receipt-cutoff"></i> Issued Payment Receipts (<%= plan.payments ? plan.payments.length : 0 %>)
+    </h3>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0 app-table">
+      <thead class="table-light">
+        <tr>
+          <th>Receipt #</th>
+          <th>Payment Date</th>
+          <th>Method</th>
+          <th>Reference</th>
+          <th class="text-end">Amount Paid</th>
+          <th>Received By</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (plan.payments && plan.payments.length) { %>
+          <% plan.payments.forEach(function (pmt) { %>
+            <tr>
+              <td>
+                <a href="/installments/receipts/<%= pmt._id %>" class="font-monospace fw-bold text-decoration-none">
+                  <%= pmt.receiptNumber %>
+                </a>
+              </td>
+              <td class="small text-muted"><%= formatDate(pmmt = pmt.paymentDate) %></td>
+              <td>
+                <span class="badge text-bg-light border text-uppercase" style="font-size:0.7rem;">
+                  <%= installments.PAYMENT_METHOD_LABELS[pmt.paymentMethod] || pmt.paymentMethod %>
+                </span>
+              </td>
+              <td class="small text-muted"><%= pmt.reference || '—' %></td>
+              <td class="text-end font-monospace fw-bold text-success"><%= formatPKR(pmt.amountPaisa) %></td>
+              <td class="small text-muted"><%= pmt.receivedBy ? pmt.receivedBy.name : '—' %></td>
+              <td class="text-end">
+                <div class="btn-group btn-group-sm">
+                  <a href="/installments/receipts/<%= pmt._id %>" class="btn btn-outline-primary" title="View Receipt">
+                    <i class="bi bi-eye"></i>
+                  </a>
+                  <a href="/installments/receipts/<%= pmt._id %>/pdf" target="_blank" class="btn btn-outline-secondary" title="Download PDF">
+                    <i class="bi bi-file-earmark-pdf"></i>
+                  </a>
+                </div>
+              </td>
+            </tr>
+          <% }); %>
+        <% } else { %>
+          <tr>
+            <td colspan="7" class="text-center py-4 text-muted small">No payments collected yet.</td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Reschedule History Timeline (if any) -->
+<% if (plan.rescheduleHistory && plan.rescheduleHistory.length) { %>
+  <div class="card app-card mb-4">
+    <div class="card-header bg-transparent py-3">
+      <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+        <i class="bi bi-arrow-clockwise"></i> Reschedule Audit History
+      </h3>
+    </div>
+    <div class="card-body p-3 p-md-4">
+      <div class="timeline">
+        <% plan.rescheduleHistory.forEach(function (h) { %>
+          <div class="pb-3 mb-3 border-bottom">
+            <div class="d-flex justify-content-between small mb-1">
+              <strong>Rescheduled by <%= h.rescheduledBy ? h.rescheduledBy.name : 'Management' %></strong>
+              <span class="text-muted"><%= formatDate(h.rescheduledAt) %></span>
+            </div>
+            <div class="small text-danger fw-semibold">Reason: "<%= h.reason %>"</div>
+            <% if (h.newScheduleSummary) { %>
+              <div class="small text-muted font-monospace mt-1"><%= h.newScheduleSummary %></div>
+            <% } %>
+          </div>
+        <% }); %>
+      </div>
+    </div>
+  </div>
+<% } %>
+
+<!-- Modals -->
+
+<!-- 1. Collect Payment Modal -->
+<div class="modal fade" id="collectPaymentModal" tabindex="-1" aria-labelledby="collectPaymentModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="/installments/<%= plan._id %>/payment">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="planId" value="<%= plan._id %>">
+
+        <div class="modal-header">
+          <h5 class="modal-title" id="collectPaymentModalLabel">Collect Installment Payment</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold text-uppercase text-muted">Amount Received (PKR) <span class="text-danger">*</span></label>
+            <input type="number" class="form-control form-control-lg fw-bold text-success" name="amount" id="collectAmountInput"
+                   min="1" step="any" required placeholder="e.g. 50000">
+            <div class="form-text">Partial payments will update the installment status; advance payments will automatically roll into upcoming tranches.</div>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label small fw-semibold text-uppercase text-muted">Payment Method <span class="text-danger">*</span></label>
+              <select class="form-select" name="paymentMethod" required>
+                <% installments.PAYMENT_METHODS.forEach(function (m) { %>
+                  <option value="<%= m %>"><%= installments.PAYMENT_METHOD_LABELS[m] %></option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-semibold text-uppercase text-muted">Payment Date</label>
+              <input type="date" class="form-control" name="paymentDate" value="<%= new Date().toISOString().slice(0, 10) %>">
+            </div>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label small fw-semibold text-uppercase text-muted">Reference / Cheque #</label>
+              <input type="text" class="form-control" name="reference" placeholder="e.g. CHQ-99881">
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-semibold text-uppercase text-muted">Bank Name</label>
+              <input type="text" class="form-control" name="bankName" placeholder="e.g. Meezan Bank">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold text-uppercase text-muted">Notes / Remarks</label>
+            <input type="text" class="form-control" name="notes" placeholder="Optional cashier note">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-receipt me-1"></i>Issue Receipt RC-XXXX
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- 2. Reschedule Modal -->
+<div class="modal fade" id="rescheduleModal" tabindex="-1" aria-labelledby="rescheduleModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="/installments/<%= plan._id %>/reschedule">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+        <div class="modal-header">
+          <h5 class="modal-title" id="rescheduleModalLabel">Reschedule Installment Plan</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-warning small">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            Rescheduling will shift all remaining pending installments starting from the new target date.
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold text-uppercase text-muted">New Start Date for Remaining <span class="text-danger">*</span></label>
+            <input type="date" class="form-control" name="newStartDate" required value="<%= new Date().toISOString().slice(0, 10) %>">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold text-uppercase text-muted">Frequency</label>
+            <select class="form-select" name="frequency">
+              <option value="monthly" <%= plan.frequency === 'monthly' ? 'selected' : '' %>>Monthly</option>
+              <option value="bi_monthly" <%= plan.frequency === 'bi_monthly' ? 'selected' : '' %>>Bi-Monthly (Every 2 mo)</option>
+              <option value="quarterly" <%= plan.frequency === 'quarterly' ? 'selected' : '' %>>Quarterly (Every 3 mo)</option>
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold text-uppercase text-muted">Mandatory Reason <span class="text-danger">*</span></label>
+            <textarea class="form-control" name="reason" rows="3" required placeholder="e.g. Customer requested extension due to seasonal crop sale"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-warning">
+            <i class="bi bi-arrow-clockwise me-1"></i>Confirm Reschedule
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- 3. Late Fee Waiver Modal -->
+<div class="modal fade" id="waiveFeeModal" tabindex="-1" aria-labelledby="waiveFeeModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" id="waiveFeeForm" action="">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+        <div class="modal-header">
+          <h5 class="modal-title" id="waiveFeeModalLabel">Waive Late Fee</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold text-uppercase text-muted">Waiver Amount (PKR) <span class="text-danger">*</span></label>
+            <input type="number" class="form-control fw-bold" name="amount" id="waiverAmountInput" min="1" step="any" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold text-uppercase text-muted">Mandatory Reason <span class="text-danger">*</span></label>
+            <textarea class="form-control" name="reason" rows="3" required placeholder="e.g. Management approval granted due to genuine medical emergency"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-warning">
+            <i class="bi bi-check2-circle me-1"></i>Waive Fee
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- 4. Owner Security Override Modal -->
+<div class="modal fade" id="overrideSecurityModal" tabindex="-1" aria-labelledby="overrideSecurityModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="/installments/<%= plan._id %>/override-security">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+        <div class="modal-header bg-danger-subtle">
+          <h5 class="modal-title text-danger" id="overrideSecurityModalLabel">Owner Security Override</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-danger small">
+            <strong>Owner Authority Only:</strong> Overriding the security checklist will immediately unblock material release and dispatch for this project despite missing security documentation.
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold text-uppercase text-muted">Mandatory Justification Reason <span class="text-danger">*</span></label>
+            <textarea class="form-control" name="reason" rows="3" required placeholder="e.g. Highly trusted repeat client; remaining post-dated cheques to be collected during site mounting"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger">
+            <i class="bi bi-shield-slash me-1"></i>Grant Owner Override
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function prefillCollection(amount) {
+  const inp = document.getElementById('collectAmountInput');
+  if (inp) inp.value = amount;
+}
+
+function prefillWaiver(installmentId, amount) {
+  const form = document.getElementById('waiveFeeForm');
+  if (form) form.action = '/installments/installments/' + installmentId + '/waive';
+  const inp = document.getElementById('waiverAmountInput');
+  if (inp) inp.value = amount;
+}
+</script>

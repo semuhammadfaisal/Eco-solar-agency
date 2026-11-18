@@ -1,0 +1,785 @@
+<%- include('../partials/page-header', {
+  heading: isEdit ? 'Edit Quotation' : 'Create Quotation',
+  subheading: 'Draft a professional solar system proposal with itemized equipment, optional extras, and milestone terms.',
+  actions: [
+    { label: 'Back to quotations', url: '/quotations', icon: 'bi-arrow-left', class: 'btn-outline-secondary' }
+  ]
+}) %>
+
+<div class="mt-2"
+     x-data="quotationForm(
+       <%= JSON.stringify(initialQuote) %>,
+       <%= JSON.stringify(inventoryItems) %>,
+       <%= JSON.stringify(canViewCosts) %>,
+       <%= JSON.stringify(canViewProfit) %>,
+       <%= JSON.stringify(isOwner) %>
+     )"
+     x-init="init()">
+
+  <!-- Below Cost / Low Margin Alerts (Visible to Owner & Accountant) -->
+  <template x-if="canViewProfit && warnings.length > 0">
+    <div class="alert alert-warning d-flex align-items-start gap-2 mb-3 shadow-sm">
+      <i class="bi bi-exclamation-triangle-fill fs-5 flex-shrink-0 mt-1"></i>
+      <div class="flex-grow-1">
+        <div class="fw-semibold">Commercial Margin Notice</div>
+        <ul class="mb-0 ps-3 small mt-1">
+          <template x-for="(w, idx) in warnings" :key="idx">
+            <li x-text="w"></li>
+          </template>
+        </ul>
+      </div>
+    </div>
+  </template>
+
+  <form method="POST" action="/quotations" @submit="handleSubmit($event)" novalidate>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <input type="hidden" name="systemConfig" :value="systemConfig">
+    <input type="hidden" name="survey" :value="survey">
+    <input type="hidden" name="itemsJson" :value="JSON.stringify(items)">
+    <input type="hidden" name="paymentPlanJson" :value="JSON.stringify(paymentPlan)">
+    <input type="hidden" name="laborCost" :value="laborCost">
+    <input type="hidden" name="transportCost" :value="transportCost">
+    <input type="hidden" name="netMeteringCost" :value="netMeteringCost">
+    <input type="hidden" name="additionalCost" :value="additionalCost">
+    <input type="hidden" name="discountType" :value="discountType">
+    <input type="hidden" name="discountValue" :value="discountValue">
+
+    <!-- Top Card: Proposal Identification & Relations -->
+    <div class="card app-card mb-3">
+      <div class="card-header bg-transparent py-3">
+        <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+          <i class="bi bi-file-earmark-person"></i> Proposal &amp; Customer Information
+        </h3>
+      </div>
+      <div class="card-body p-3 p-md-4">
+        <div class="row g-3">
+          <!-- Customer Selection -->
+          <div class="col-12 col-md-5">
+            <label class="form-label small fw-semibold text-uppercase text-muted">Customer <span class="text-danger">*</span></label>
+            <select class="form-select form-select-lg" name="customer" x-model="customer" required>
+              <option value="">Select Customer…</option>
+              <% customers.forEach(function (c) { %>
+                <option value="<%= c._id %>" <%= (initialQuote.customer && String(initialQuote.customer) === String(c._id)) ? 'selected' : '' %>>
+                  <%= c.name %> (<%= c.code %>)<%= c.phone ? ' · ' + c.phone : '' %>
+                </option>
+              <% }); %>
+            </select>
+          </div>
+
+          <!-- System Type -->
+          <div class="col-6 col-md-3">
+            <label class="form-label small fw-semibold text-uppercase text-muted">System Type <span class="text-danger">*</span></label>
+            <select class="form-select form-select-lg" name="systemType" x-model="systemType" @change="recalculate()">
+              <% systems.SYSTEM_TYPES.forEach(function (type) { %>
+                <option value="<%= type %>"><%= systems.SYSTEM_TYPE_LABELS[type] %></option>
+              <% }); %>
+            </select>
+          </div>
+
+          <!-- Sales Representative Assignment -->
+          <div class="col-6 col-md-4">
+            <label class="form-label small fw-semibold text-uppercase text-muted">Sales Representative</label>
+            <% if (isOwner || currentUser.role === 'manager') { %>
+              <select class="form-select" name="assignedTo" x-model="assignedTo">
+                <% salesUsers.forEach(function (u) { %>
+                  <option value="<%= u._id %>"><%= u.name %> (<%= u.role %>)</option>
+                <% }); %>
+              </select>
+            <% } else { %>
+              <input type="text" class="form-control bg-light" readonly value="<%= currentUser.name %>">
+              <input type="hidden" name="assignedTo" value="<%= currentUser._id %>">
+            <% } %>
+          </div>
+
+          <!-- Quotation Date & Validity -->
+          <div class="col-6 col-md-3">
+            <label class="form-label small fw-semibold text-uppercase text-muted">Quotation Date</label>
+            <input type="date" class="form-control" name="quotationDate" x-model="quotationDate">
+          </div>
+
+          <div class="col-6 col-md-3">
+            <label class="form-label small fw-semibold text-uppercase text-muted">Valid Until <span class="text-danger">*</span></label>
+            <input type="date" class="form-control fw-semibold text-danger" name="validUntil" x-model="validUntil" required>
+          </div>
+
+          <div class="col-12 col-md-6 d-flex align-items-end">
+            <template x-if="systemConfig">
+              <div class="alert alert-info py-2 px-3 mb-0 small w-100 d-flex align-items-center gap-2">
+                <i class="bi bi-cpu-fill fs-5"></i>
+                <span>Pre-loaded from System Configuration snapshot. Line items and costs are locked to this proposal.</span>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sizing & Energy Metrics Ribbon -->
+    <div class="row g-2 mb-3">
+      <div class="col-6 col-md-3">
+        <div class="card app-card border-primary-subtle text-center p-3 h-100">
+          <div class="text-uppercase small text-muted fw-semibold">Capacity</div>
+          <div class="display-6 fw-bold text-primary" x-text="`${capacityKw} kW`">0 kW</div>
+          <div class="small text-muted" x-text="`${panelCount} Panels`">0 Panels</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card app-card border-success-subtle text-center p-3 h-100">
+          <div class="text-uppercase small text-muted fw-semibold">Daily Production</div>
+          <div class="display-6 fw-bold text-success" x-text="`${estimatedUnits.daily} kWh`">0 kWh</div>
+          <div class="small text-muted">Estimated avg per day</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card app-card border-info-subtle text-center p-3 h-100">
+          <div class="text-uppercase small text-muted fw-semibold">Monthly Generation</div>
+          <div class="display-6 fw-bold text-info" x-text="`${estimatedUnits.monthly} kWh`">0 kWh</div>
+          <div class="small text-muted" x-text="`Yearly: ${estimatedUnits.yearly} kWh`">Yearly: 0 kWh</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card app-card border-warning-subtle text-center p-3 h-100">
+          <div class="text-uppercase small text-muted fw-semibold">Final Price</div>
+          <div class="display-6 fw-bold text-dark" x-text="formatMoney(finalPrice)">PKR 0</div>
+          <template x-if="canViewProfit">
+            <div class="small fw-semibold" :class="netProfit < 0 ? 'text-danger' : 'text-success'"
+                 x-text="`Profit: ${formatMoney(netProfit)} (${marginPercent}%)`"></div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- Itemized Equipment & Optional Extras Table Card -->
+    <div class="card app-card mb-3">
+      <div class="card-header bg-transparent py-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div>
+          <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+            <i class="bi bi-box-seam"></i> System Items &amp; Optional Extras
+          </h3>
+          <p class="text-muted small mb-0">Components included in the snapshot bill of materials. Check "Optional Extra" for items offered as optional add-ons.</p>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-primary" @click="addCustomLine()">
+          <i class="bi bi-plus-lg me-1"></i>Add Custom Item
+        </button>
+      </div>
+
+      <!-- Quick Inventory Picker Bar -->
+      <div class="card-body bg-light border-bottom p-3">
+        <div class="row g-2 align-items-center">
+          <div class="col-12 col-md-7">
+            <select class="form-select" x-model="pickedItemId">
+              <option value="">-- Quick select component from inventory --</option>
+              <template x-for="inv in inventoryItems" :key="inv._id">
+                <option :value="inv._id"
+                        x-text="`${inv.sku} · ${inv.name} (${inv.category || 'other'}${inv.brand ? ' - ' + inv.brand : ''}) · PKR ${(inv.sellingPricePaisa/100).toLocaleString('en-PK')}`">
+                </option>
+              </template>
+            </select>
+          </div>
+          <div class="col-4 col-md-2">
+            <div class="input-group">
+              <span class="input-group-text small">Qty</span>
+              <input type="number" class="form-control" min="1" step="1" x-model.number="pickedQty">
+            </div>
+          </div>
+          <div class="col-8 col-md-3">
+            <button type="button" class="btn btn-primary w-100" @click="addInventoryItem()" :disabled="!pickedItemId">
+              <i class="bi bi-plus-circle me-1"></i>Add to Proposal
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Line Items List -->
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th style="width: 40px;">#</th>
+              <th>Item / Description</th>
+              <th style="width: 110px;">Qty</th>
+              <th style="width: 140px;">Unit Price (PKR)</th>
+              <template x-if="canViewCosts">
+                <th style="width: 130px;">Unit Cost (PKR)</th>
+              </template>
+              <th style="width: 140px;" class="text-end">Total Price</th>
+              <th style="width: 110px;" class="text-center">Optional?</th>
+              <th style="width: 45px;"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="(line, idx) in items" :key="idx">
+              <tr :class="line.isOptionalExtra ? 'table-info-subtle' : ''">
+                <td class="text-muted small" x-text="idx + 1"></td>
+                <td>
+                  <input type="text" class="form-control form-control-sm fw-medium mb-1"
+                         x-model="line.itemSnapshot.name" placeholder="Item name &amp; specification">
+                  <div class="row g-1">
+                    <div class="col-6">
+                      <input type="text" class="form-control form-control-sm text-muted small"
+                             x-model="line.itemSnapshot.brand" placeholder="Brand / Model">
+                    </div>
+                    <div class="col-6">
+                      <input type="text" class="form-control form-control-sm text-muted small"
+                             x-model="line.notes" placeholder="Notes / Warranty clause">
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <input type="number" class="form-control form-control-sm"
+                         min="1" step="any" x-model.number="line.qty" @input="recalculate()">
+                  <span class="small text-muted" x-text="line.itemSnapshot.unit || 'pcs'"></span>
+                </td>
+                <td>
+                  <input type="number" class="form-control form-control-sm fw-semibold"
+                         min="0" step="any" x-model.number="line.unitSellingPrice" @input="recalculate()">
+                </td>
+                <template x-if="canViewCosts">
+                  <td>
+                    <input type="number" class="form-control form-control-sm text-muted"
+                           min="0" step="any" x-model.number="line.unitCost" @input="recalculate()">
+                  </td>
+                </template>
+                <td class="text-end fw-bold" x-text="formatMoney((line.qty || 0) * (line.unitSellingPrice || 0))"></td>
+                <td class="text-center">
+                  <div class="form-check d-flex justify-content-center">
+                    <input class="form-check-input" type="checkbox" x-model="line.isOptionalExtra" @change="recalculate()">
+                  </div>
+                  <template x-if="line.isOptionalExtra">
+                    <span class="badge text-bg-info text-white mt-1" style="font-size:0.65rem;">Extra</span>
+                  </template>
+                </td>
+                <td class="text-center">
+                  <button type="button" class="btn btn-sm btn-link text-danger p-0" @click="removeItem(idx)" title="Remove item">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </td>
+              </tr>
+            </template>
+            <template x-if="items.length === 0">
+              <tr>
+                <td colspan="8" class="text-center py-4 text-muted">
+                  <i class="bi bi-box fs-3 d-block mb-1"></i>
+                  No components added yet. Select an item from inventory above or click <strong>Add Custom Item</strong>.
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Commercial Adjustments, Overheads & Totals Card -->
+    <div class="row g-3 mb-3">
+      <!-- Left Column: Installation Overheads & Discount -->
+      <div class="col-12 col-lg-7">
+        <div class="card app-card h-100">
+          <div class="card-header bg-transparent py-3">
+            <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+              <i class="bi bi-tools"></i> Installation Overheads &amp; Discounts
+            </h3>
+          </div>
+          <div class="card-body p-3 p-md-4">
+            <div class="row g-3">
+              <div class="col-6">
+                <label class="form-label small fw-semibold text-uppercase text-muted">Labor &amp; Mounting (PKR)</label>
+                <input type="number" class="form-control" min="0" step="any" x-model.number="laborCost" @input="recalculate()">
+              </div>
+              <div class="col-6">
+                <label class="form-label small fw-semibold text-uppercase text-muted">Transport &amp; Logistics (PKR)</label>
+                <input type="number" class="form-control" min="0" step="any" x-model.number="transportCost" @input="recalculate()">
+              </div>
+              <div class="col-6">
+                <label class="form-label small fw-semibold text-uppercase text-muted">Net Metering Filing Fee (PKR)</label>
+                <input type="number" class="form-control" min="0" step="any" x-model.number="netMeteringCost" @input="recalculate()">
+              </div>
+              <div class="col-6">
+                <label class="form-label small fw-semibold text-uppercase text-muted">Additional Engineering (PKR)</label>
+                <input type="number" class="form-control" min="0" step="any" x-model.number="additionalCost" @input="recalculate()">
+              </div>
+            </div>
+
+            <hr class="my-3">
+
+            <div class="row g-3 align-items-center">
+              <div class="col-6 col-md-5">
+                <label class="form-label small fw-semibold text-uppercase text-muted">Discount Type</label>
+                <select class="form-select" x-model="discountType" @change="recalculate()">
+                  <option value="percent">Percentage (%)</option>
+                  <option value="amount">Fixed Amount (PKR)</option>
+                </select>
+              </div>
+              <div class="col-6 col-md-7">
+                <label class="form-label small fw-semibold text-uppercase text-muted">Discount Value</label>
+                <div class="input-group">
+                  <input type="number" class="form-control fw-semibold" min="0" step="any" x-model.number="discountValue" @input="recalculate()">
+                  <span class="input-group-text" x-text="discountType === 'percent' ? '%' : 'PKR'"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Financial Summary -->
+      <div class="col-12 col-lg-5">
+        <div class="card app-card h-100 bg-light border-primary-subtle">
+          <div class="card-header bg-transparent py-3">
+            <h3 class="h6 fw-bold mb-0 text-primary">Proposal Commercial Summary</h3>
+          </div>
+          <div class="card-body p-3 p-md-4">
+            <dl class="row mb-0 small">
+              <dt class="col-7 text-muted fw-normal">Components Subtotal</dt>
+              <dd class="col-5 text-end fw-semibold" x-text="formatMoney(itemsSellingTotal)">PKR 0</dd>
+
+              <dt class="col-7 text-muted fw-normal">Overheads (Labor, Freight, Net Metering)</dt>
+              <dd class="col-5 text-end fw-semibold" x-text="formatMoney(overheadsTotal)">PKR 0</dd>
+
+              <dt class="col-7 text-muted fw-normal">Gross Proposal Price</dt>
+              <dd class="col-5 text-end fw-bold" x-text="formatMoney(grossPrice)">PKR 0</dd>
+
+              <template x-if="discountPaisaAmount > 0">
+                <div class="row g-0 w-100 text-danger">
+                  <dt class="col-7 fw-normal">Discount Applied</dt>
+                  <dd class="col-5 text-end fw-semibold" x-text="`- ${formatMoney(discountPaisaAmount)}`">- PKR 0</dd>
+                </div>
+              </template>
+
+              <hr class="my-2">
+
+              <dt class="col-6 fs-6 fw-bold text-dark">Total Investment</dt>
+              <dd class="col-6 text-end fs-5 fw-bold text-primary mb-0" x-text="formatMoney(finalPrice)">PKR 0</dd>
+            </dl>
+
+            <!-- Profit & Margin Breakdown for Owner / Accountant -->
+            <template x-if="canViewProfit">
+              <div class="mt-3 p-2 rounded bg-white border small">
+                <div class="d-flex justify-content-between text-muted">
+                  <span>Base Cost:</span>
+                  <span class="fw-semibold text-dark" x-text="formatMoney(totalCost)">PKR 0</span>
+                </div>
+                <div class="d-flex justify-content-between mt-1">
+                  <span>Expected Gross Profit:</span>
+                  <span class="fw-bold" :class="netProfit < 0 ? 'text-danger' : 'text-success'"
+                        x-text="`${formatMoney(netProfit)} (${marginPercent}%)`">PKR 0</span>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Payment Plan & Milestone Schedule Card -->
+    <div class="card app-card mb-3">
+      <div class="card-header bg-transparent py-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div>
+          <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+            <i class="bi bi-cash-stack"></i> Payment Schedule &amp; Terms
+          </h3>
+          <p class="text-muted small mb-0">Choose between Cash (100% advance) or flexible project milestone installments.</p>
+        </div>
+
+        <div class="btn-group" role="group">
+          <input type="radio" class="btn-check" name="paymentOption" id="payCash" value="cash" x-model="paymentOption" @change="recalculateMilestones()">
+          <label class="btn btn-outline-primary btn-sm" for="payCash">100% Advance (Cash)</label>
+
+          <input type="radio" class="btn-check" name="paymentOption" id="payInstallment" value="installment" x-model="paymentOption" @change="recalculateMilestones()">
+          <label class="btn btn-outline-primary btn-sm" for="payInstallment">Installment Milestones</label>
+        </div>
+      </div>
+
+      <div class="card-body p-3 p-md-4">
+        <!-- Milestone Table for Installments -->
+        <template x-if="paymentOption === 'installment'">
+          <div>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div class="small fw-semibold">
+                Milestones Schedule
+                <span class="badge ms-2" :class="milestoneTotalPercent === 100 ? 'text-bg-success' : 'text-bg-danger'"
+                      x-text="`Total: ${milestoneTotalPercent}%`"></span>
+              </div>
+              <div class="d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" @click="resetStandardMilestones()">
+                  <i class="bi bi-arrow-clockwise me-1"></i>Standard (50 / 40 / 10)
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-primary" @click="addMilestone()">
+                  <i class="bi bi-plus-lg me-1"></i>Add Milestone
+                </button>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="table table-sm align-middle table-bordered mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Milestone Stage / Description</th>
+                    <th style="width: 120px;">Percentage (%)</th>
+                    <th style="width: 160px;" class="text-end">Amount (PKR)</th>
+                    <th style="width: 170px;">Target Due Date</th>
+                    <th>Notes</th>
+                    <th style="width: 40px;"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="(ms, mIdx) in paymentPlan" :key="mIdx">
+                    <tr>
+                      <td>
+                        <input type="text" class="form-control form-control-sm" x-model="ms.label" required placeholder="e.g. Booking Advance">
+                      </td>
+                      <td>
+                        <div class="input-group input-group-sm">
+                          <input type="number" class="form-control" min="1" max="100" step="any"
+                                 x-model.number="ms.percent" @input="recalculateMilestones()">
+                          <span class="input-group-text">%</span>
+                        </div>
+                      </td>
+                      <td class="text-end fw-semibold" x-text="formatMoney(Math.round((finalPrice * (ms.percent || 0)) / 100))"></td>
+                      <td>
+                        <input type="date" class="form-control form-control-sm" x-model="ms.dueDate">
+                      </td>
+                      <td>
+                        <input type="text" class="form-control form-control-sm" x-model="ms.notes" placeholder="Optional notes">
+                      </td>
+                      <td class="text-center">
+                        <button type="button" class="btn btn-sm btn-link text-danger p-0" @click="removeMilestone(mIdx)">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+            <template x-if="milestoneTotalPercent !== 100">
+              <div class="form-text text-danger mt-1">
+                <i class="bi bi-exclamation-circle me-1"></i> Milestone percentages must sum exactly to 100%. (Current: <span x-text="milestoneTotalPercent"></span>%)
+              </div>
+            </template>
+          </div>
+        </template>
+
+        <template x-if="paymentOption === 'cash'">
+          <div class="alert alert-light border d-flex align-items-center gap-2 mb-0">
+            <i class="bi bi-info-circle text-primary fs-5"></i>
+            <div>
+              <strong>Full Cash Booking:</strong> 100% full payment via pay order / direct transfer upon contract signing (<span class="fw-bold" x-text="formatMoney(finalPrice)"></span>).
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- Terms, Warranty Clauses & Urdu Section Card -->
+    <div class="card app-card mb-4">
+      <div class="card-header bg-transparent py-3">
+        <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+          <i class="bi bi-shield-check"></i> Warranty Clauses &amp; Terms
+        </h3>
+      </div>
+      <div class="card-body p-3 p-md-4">
+        <div class="row g-3">
+          <div class="col-12 col-md-6">
+            <label class="form-label small fw-semibold text-uppercase text-muted">Warranty Terms</label>
+            <textarea class="form-control font-monospace small" rows="4" name="warrantyTerms" x-model="warrantyTerms"></textarea>
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label small fw-semibold text-uppercase text-muted">Standard Commercial Terms &amp; Conditions</label>
+            <textarea class="form-control font-monospace small" rows="4" name="terms" x-model="terms"></textarea>
+          </div>
+
+          <div class="col-12">
+            <div class="form-check form-switch mt-2">
+              <input class="form-check-input" type="checkbox" id="includeUrdu" name="includeUrdu" value="true" x-model="includeUrdu">
+              <label class="form-check-label fw-semibold" for="includeUrdu">
+                Include Urdu Section in PDF (اہم شرائط / اردو نوٹس)
+              </label>
+            </div>
+          </div>
+
+          <template x-if="includeUrdu">
+            <div class="col-12">
+              <label class="form-label small fw-semibold text-uppercase text-muted">Urdu Instructions / Notes (اختیاری اردو شرائط)</label>
+              <textarea class="form-control text-end" rows="3" name="urduNotes" x-model="urduNotes" dir="rtl"
+                        placeholder="وارنٹی کلیمز مینوفیکچرر کی شرائط کے مطابق لاگو ہوں گے۔ نیٹ میٹرنگ کے عمل کی منظوری متعلقہ ڈسکوز (DISCO) کے قوانین سے مشروط ہے۔"></textarea>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Bar -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 py-3 border-top">
+      <a href="/quotations" class="btn btn-outline-secondary">
+        <i class="bi bi-x-lg me-1"></i>Cancel
+      </a>
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary btn-lg shadow-sm">
+          <i class="bi bi-check2-circle me-1"></i>Save &amp; Generate Quotation
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script>
+function quotationForm(initial, inventory, canViewCosts, canViewProfit, isOwner) {
+  return {
+    customer: initial.customer || '',
+    survey: initial.survey || '',
+    systemConfig: initial.systemConfig || '',
+    assignedTo: initial.assignedTo || '',
+    systemType: initial.systemType || 'on_grid',
+    quotationDate: new Date().toISOString().split('T')[0],
+    validUntil: initial.validUntil
+      ? new Date(initial.validUntil).toISOString().split('T')[0]
+      : new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0],
+
+    inventoryItems: inventory || [],
+    items: (initial.items || []).map(it => ({
+      item: it.item || null,
+      itemSnapshot: it.itemSnapshot || {
+        sku: '',
+        name: it.name || 'Component Item',
+        category: it.category || 'other',
+        brand: it.brand || '',
+        model: it.model || '',
+        unit: it.unit || 'pcs',
+        wattage: it.wattage || null,
+        capacityKw: it.capacityKw || null,
+        warrantyYears: it.warrantyYears || null
+      },
+      qty: Number(it.qty) || 1,
+      unitSellingPrice: Number(it.unitSellingPrice) || 0,
+      unitCost: Number(it.unitCost) || 0,
+      notes: it.notes || '',
+      isOptionalExtra: Boolean(it.isOptionalExtra)
+    })),
+
+    pickedItemId: '',
+    pickedQty: 1,
+
+    laborCost: Number(initial.laborCost) || 0,
+    transportCost: Number(initial.transportCost) || 0,
+    netMeteringCost: Number(initial.netMeteringCost) || 0,
+    additionalCost: Number(initial.additionalCost) || 0,
+
+    discountType: initial.discountType || 'percent',
+    discountValue: Number(initial.discountValue) || 0,
+
+    paymentOption: initial.paymentOption || 'cash',
+    paymentPlan: (initial.paymentPlan && initial.paymentPlan.length) ? initial.paymentPlan : [
+      { label: 'Booking Advance (50%)', percent: 50, dueDate: '', notes: '' },
+      { label: 'On Material Delivery (40%)', percent: 40, dueDate: '', notes: '' },
+      { label: 'On Testing & Commissioning (10%)', percent: 10, dueDate: '', notes: '' }
+    ],
+
+    terms: initial.terms || '',
+    warrantyTerms: initial.warrantyTerms || '',
+    includeUrdu: Boolean(initial.includeUrdu),
+    urduNotes: initial.urduNotes || '',
+
+    canViewCosts: Boolean(canViewCosts),
+    canViewProfit: Boolean(canViewProfit),
+    isOwner: Boolean(isOwner),
+
+    // Live reactive totals
+    capacityKw: 0,
+    panelCount: 0,
+    estimatedUnits: { daily: 0, monthly: 0, yearly: 0 },
+    itemsSellingTotal: 0,
+    overheadsTotal: 0,
+    grossPrice: 0,
+    discountPaisaAmount: 0,
+    finalPrice: 0,
+    totalCost: 0,
+    netProfit: 0,
+    marginPercent: 0,
+    warnings: [],
+
+    init() {
+      this.recalculate();
+    },
+
+    formatMoney(val) {
+      const num = Math.round(Number(val) || 0);
+      return 'PKR ' + num.toLocaleString('en-PK');
+    },
+
+    get milestoneTotalPercent() {
+      if (this.paymentOption !== 'installment') return 100;
+      return this.paymentPlan.reduce((acc, ms) => acc + (Number(ms.percent) || 0), 0);
+    },
+
+    addInventoryItem() {
+      if (!this.pickedItemId || this.pickedQty <= 0) return;
+      const found = this.inventoryItems.find(i => String(i._id) === String(this.pickedItemId));
+      if (!found) return;
+
+      this.items.push({
+        item: found._id,
+        itemSnapshot: {
+          sku: found.sku || '',
+          name: found.name,
+          category: found.category || 'other',
+          brand: found.brand || '',
+          model: found.model || '',
+          unit: found.unit || 'pcs',
+          wattage: found.wattage || null,
+          capacityKw: found.capacityKw || null,
+          warrantyYears: found.warrantyYears || null
+        },
+        qty: Number(this.pickedQty),
+        unitSellingPrice: Number((found.sellingPricePaisa || 0) / 100),
+        unitCost: Number((found.unitCostPaisa || found.avgCostPaisa || found.purchasePricePaisa || 0) / 100),
+        notes: '',
+        isOptionalExtra: false
+      });
+
+      this.pickedItemId = '';
+      this.pickedQty = 1;
+      this.recalculate();
+    },
+
+    addCustomLine() {
+      this.items.push({
+        item: null,
+        itemSnapshot: {
+          sku: 'CUSTOM',
+          name: 'Custom Equipment / Accessory',
+          category: 'other',
+          brand: '',
+          model: '',
+          unit: 'pcs',
+          wattage: null,
+          capacityKw: null,
+          warrantyYears: null
+        },
+        qty: 1,
+        unitSellingPrice: 0,
+        unitCost: 0,
+        notes: '',
+        isOptionalExtra: false
+      });
+      this.recalculate();
+    },
+
+    removeItem(idx) {
+      this.items.splice(idx, 1);
+      this.recalculate();
+    },
+
+    addMilestone() {
+      this.paymentPlan.push({
+        label: 'Payment Milestone',
+        percent: 0,
+        dueDate: '',
+        notes: ''
+      });
+    },
+
+    removeMilestone(idx) {
+      this.paymentPlan.splice(idx, 1);
+    },
+
+    resetStandardMilestones() {
+      this.paymentPlan = [
+        { label: 'Booking Advance (50%)', percent: 50, dueDate: '', notes: '' },
+        { label: 'On Material Delivery (40%)', percent: 40, dueDate: '', notes: '' },
+        { label: 'On Testing & Commissioning (10%)', percent: 10, dueDate: '', notes: '' }
+      ];
+    },
+
+    recalculateMilestones() {
+      // triggers reactivity
+    },
+
+    recalculate() {
+      let panelCount = 0;
+      let panelWatts = 0;
+      let inverterKw = 0;
+      let itemSelling = 0;
+      let itemCostTotal = 0;
+
+      for (const line of this.items) {
+        const qty = Number(line.qty) || 0;
+        const snap = line.itemSnapshot || {};
+        const cat = (snap.category || '').toLowerCase();
+        const watts = Number(snap.wattage) || 0;
+        const kw = Number(snap.capacityKw) || 0;
+
+        if (cat === 'panel') {
+          panelCount += qty;
+          panelWatts += qty * watts;
+        } else if (cat === 'inverter') {
+          inverterKw += qty * (kw || watts / 1000);
+        }
+
+        const lineSelling = qty * (Number(line.unitSellingPrice) || 0);
+        const lineCost = qty * (Number(line.unitCost) || 0);
+
+        itemSelling += lineSelling;
+        itemCostTotal += lineCost;
+      }
+
+      const calculatedPanelKw = panelWatts / 1000;
+      this.capacityKw = calculatedPanelKw > 0 ? Number(calculatedPanelKw.toFixed(2)) : Number(inverterKw.toFixed(2));
+      this.panelCount = panelCount;
+
+      const monthlyUnits = Math.round(this.capacityKw * 120);
+      this.estimatedUnits = {
+        daily: Number((monthlyUnits / 30).toFixed(1)),
+        monthly: monthlyUnits,
+        yearly: Math.round(monthlyUnits * 12)
+      };
+
+      this.itemsSellingTotal = itemSelling;
+      this.overheadsTotal = (Number(this.laborCost) || 0) +
+                            (Number(this.transportCost) || 0) +
+                            (Number(this.netMeteringCost) || 0) +
+                            (Number(this.additionalCost) || 0);
+
+      this.grossPrice = this.itemsSellingTotal + this.overheadsTotal;
+
+      if (this.discountType === 'percent') {
+        const pct = Math.min(100, Math.max(0, Number(this.discountValue) || 0));
+        this.discountPaisaAmount = Math.round(this.grossPrice * (pct / 100));
+      } else {
+        this.discountPaisaAmount = Math.min(this.grossPrice, Math.max(0, Number(this.discountValue) || 0));
+      }
+
+      this.finalPrice = Math.max(0, this.grossPrice - this.discountPaisaAmount);
+
+      this.totalCost = itemCostTotal + this.overheadsTotal;
+      this.netProfit = this.finalPrice - this.totalCost;
+      this.marginPercent = this.finalPrice > 0 ? Number(((this.netProfit / this.finalPrice) * 100).toFixed(1)) : 0;
+
+      // Warnings
+      this.warnings = [];
+      if (this.finalPrice < this.totalCost) {
+        this.warnings.push('Selling price is BELOW total base cost! This quote operates at a financial loss.');
+      } else if (this.marginPercent < 8) {
+        this.warnings.push(`Low profit margin alert (${this.marginPercent}%). Consider adjusting line prices or overheads.`);
+      }
+    },
+
+    handleSubmit(e) {
+      if (!this.customer) {
+        alert('Please select a customer for this quotation.');
+        e.preventDefault();
+        return;
+      }
+      if (!this.items.length) {
+        alert('Please add at least one item component to the proposal.');
+        e.preventDefault();
+        return;
+      }
+      if (this.paymentOption === 'installment' && this.milestoneTotalPercent !== 100) {
+        alert('Installment milestones must sum exactly to 100%. Current sum: ' + this.milestoneTotalPercent + '%');
+        e.preventDefault();
+        return;
+      }
+    }
+  };
+}
+</script>

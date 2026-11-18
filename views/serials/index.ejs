@@ -1,0 +1,189 @@
+<%
+  var headerActions = [];
+  if (canManage) {
+    headerActions.push({ label: 'Register serials', url: '/serials/new', icon: 'bi-plus-lg', class: 'btn-primary' });
+  }
+  headerActions.push({ label: 'Back to inventory', url: '/items', icon: 'bi-arrow-left', class: 'btn-outline-secondary' });
+%>
+<%- include('../partials/page-header', {
+  heading: 'Serial numbers',
+  subheading: 'Register serials and barcodes for any product, then search them to see the item, supplier, purchase, customer and full status history.',
+  actions: headerActions
+}) %>
+
+<div class="row g-3 mt-1">
+  <div class="col-6 col-lg-2">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-secondary-subtle text-secondary-emphasis"><i class="bi bi-upc-scan"></i></span>
+      <div class="stat-value"><%= stats.total %></div>
+      <div class="stat-label">Total serials</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-2">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-dark-subtle text-dark-emphasis"><i class="bi bi-barcode"></i></span>
+      <div class="stat-value"><%= stats.barcoded || 0 %></div>
+      <div class="stat-label">With barcode</div>
+    </div></div>
+  </div>
+  <% inventory.SERIAL_STATUSES.forEach(function (status) { %>
+    <div class="col-6 col-lg-2">
+      <div class="card app-card h-100"><div class="card-body stat-card">
+        <span class="stat-icon bg-<%= inventory.SERIAL_STATUS_BADGES[status] %>-subtle text-<%= inventory.SERIAL_STATUS_BADGES[status] %>-emphasis">
+          <i class="bi bi-circle-fill" style="font-size:.65rem"></i>
+        </span>
+        <div class="stat-value"><%= stats.byStatus[status] || 0 %></div>
+        <div class="stat-label"><%= inventory.SERIAL_STATUS_LABELS[status] %></div>
+      </div></div>
+    </div>
+  <% }); %>
+</div>
+
+<div class="card app-card mt-3">
+  <div class="card-body border-bottom">
+    <form method="GET" action="/serials" class="row g-2 align-items-end">
+      <div class="col-12 col-md-3">
+        <label for="search" class="form-label small text-muted mb-1">Search</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="search" class="form-control" id="search" name="search"
+                 value="<%= filters.search %>" placeholder="Serial, barcode, project, item SKU or name">
+        </div>
+      </div>
+
+      <div class="col-6 col-md-2">
+        <label for="status" class="form-label small text-muted mb-1">Status</label>
+        <select class="form-select" id="status" name="status">
+          <option value="">All statuses</option>
+          <% inventory.SERIAL_STATUSES.forEach(function (status) { %>
+            <option value="<%= status %>"<%= filters.status === status ? ' selected' : '' %>>
+              <%= inventory.SERIAL_STATUS_LABELS[status] %>
+            </option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div class="col-6 col-md-3">
+        <label for="item" class="form-label small text-muted mb-1">Product</label>
+        <select class="form-select" id="item" name="item">
+          <option value="">All products</option>
+          <% items.forEach(function (item) { %>
+            <option value="<%= item._id %>"<%= String(filters.item) === String(item._id) ? ' selected' : '' %>>
+              <%= item.sku %> — <%= item.name %>
+            </option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div class="col-6 col-md-2">
+        <label for="supplier" class="form-label small text-muted mb-1">Supplier</label>
+        <select class="form-select" id="supplier" name="supplier">
+          <option value="">All suppliers</option>
+          <% suppliers.forEach(function (supplier) { %>
+            <option value="<%= supplier._id %>"<%= String(filters.supplier) === String(supplier._id) ? ' selected' : '' %>>
+              <%= supplier.name %>
+            </option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div class="col-12 col-md-2 d-flex gap-2">
+        <button type="submit" class="btn btn-primary flex-grow-1"><i class="bi bi-funnel me-1"></i>Filter</button>
+        <a href="/serials" class="btn btn-outline-secondary">Reset</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card-header bg-transparent d-flex flex-wrap gap-2 justify-content-between align-items-center">
+    <span class="small text-muted"><strong><%= total %></strong> serial<%= total === 1 ? '' : 's' %> found</span>
+    <span class="badge text-bg-light border">In stock + defective = on-hand units</span>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-hover align-middle app-table mb-0">
+      <thead>
+        <tr>
+          <th>Serial</th>
+          <th>Barcode</th>
+          <th>Product</th>
+          <th>Status</th>
+          <th>Supplier</th>
+          <th>Purchase</th>
+          <th>Customer / project</th>
+          <th>Warranty ends</th>
+          <th class="text-end" style="width:90px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (!serials.length) { %>
+          <tr>
+            <td colspan="9" class="text-center py-5 text-muted">
+              <i class="bi bi-upc-scan fs-3 d-block mb-2"></i>
+              No serial numbers match your filters.
+              <% if (canManage) { %>
+                <div class="mt-2"><a href="/serials/new" class="btn btn-sm btn-primary">Register the first serial</a></div>
+              <% } %>
+            </td>
+          </tr>
+        <% } else { %>
+          <% serials.forEach(function (serial) { %>
+            <tr>
+              <td class="font-monospace small">
+                <a href="/serials/<%= serial._id %>" class="fw-semibold text-decoration-none"><%= serial.serial %></a>
+                <div class="text-muted" style="font-size:.72rem">Received <%= formatDate(serial.receivedAt || serial.createdAt) %></div>
+              </td>
+              <td class="small">
+                <% if (serial.barcode) { %>
+                  <span class="font-monospace"><%= serial.barcode %></span>
+                <% } else { %><span class="text-muted">—</span><% } %>
+              </td>
+              <td class="small">
+                <% if (serial.item) { %>
+                  <a href="/items/<%= serial.item._id %>" class="text-decoration-none"><%= serial.item.sku %></a>
+                  <div class="text-muted"><%= serial.item.name %></div>
+                <% } else { %>—<% } %>
+              </td>
+              <td>
+                <span class="badge text-bg-<%= inventory.SERIAL_STATUS_BADGES[serial.status] || 'secondary' %>">
+                  <%= inventory.SERIAL_STATUS_LABELS[serial.status] || serial.status %>
+                </span>
+              </td>
+              <td class="small">
+                <% if (serial.supplier) { %>
+                  <a href="/suppliers/<%= serial.supplier._id %>" class="text-decoration-none"><%= serial.supplier.name %></a>
+                <% } else { %>—<% } %>
+              </td>
+              <td class="small">
+                <% if (serial.purchase) { %>
+                  <a href="/purchases/<%= serial.purchase._id %>" class="font-monospace text-decoration-none"><%= serial.purchase.number %></a>
+                <% } else { %>—<% } %>
+              </td>
+              <td class="small">
+                <% if (serial.customer) { %>
+                  <a href="/customers/<%= serial.customer._id %>" class="text-decoration-none"><%= serial.customer.name %></a>
+                <% } else { %>
+                  <span class="text-muted">—</span>
+                <% } %>
+                <% if (serial.project) { %><div class="text-muted"><%= serial.project %></div><% } %>
+              </td>
+              <td class="small text-muted">
+                <% if (serial.productWarrantyEnd) { %>
+                  <%= formatDate(serial.productWarrantyEnd) %>
+                  <div style="font-size:.72rem">Product</div>
+                <% } else { %>—<% } %>
+              </td>
+              <td class="text-end text-nowrap">
+                <% if (canManage) { %>
+                  <a class="btn btn-sm btn-outline-secondary" href="/serials/<%= serial._id %>/edit" title="Edit serial"><i class="bi bi-pencil"></i></a>
+                <% } %>
+                <a class="btn btn-sm btn-outline-secondary" href="/serials/<%= serial._id %>" title="Serial history"><i class="bi bi-clock-history"></i></a>
+              </td>
+            </tr>
+          <% }); %>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+
+  <%- include('../partials/pagination', { pagination: pagination }) %>
+</div>

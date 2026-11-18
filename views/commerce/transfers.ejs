@@ -1,0 +1,93 @@
+<% var canViewCosts = typeof canViewCosts !== 'undefined' ? canViewCosts : false; %>
+
+<%- include('../partials/page-header', {
+  heading: 'Stock Transfers',
+  subheading: 'Audited inventory movement between agency locations, with transfer pricing and margin.',
+  actions: can('transfers.manage') ? [{ label: 'New transfer', url: '/transfers/new', icon: 'bi-plus-lg', class: 'btn-primary' }] : []
+}) %>
+
+<div class="row g-3 mt-1">
+  <div class="col-6 col-lg-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-primary-subtle text-primary"><i class="bi bi-arrow-left-right"></i></span>
+      <div class="stat-value"><%= summary.count %></div>
+      <div class="stat-label">Transfers recorded</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-info-subtle text-info-emphasis"><i class="bi bi-box-seam"></i></span>
+      <div class="stat-value"><%= formatPKR(summary.branchValuePaisa) %></div>
+      <div class="stat-label">Branch value transferred</div>
+    </div></div>
+  </div>
+  <% if (canViewCosts) { %>
+    <div class="col-6 col-lg-3">
+      <div class="card app-card h-100"><div class="card-body stat-card">
+        <span class="stat-icon bg-secondary-subtle text-secondary-emphasis"><i class="bi bi-calculator"></i></span>
+        <div class="stat-value"><%= formatPKR(summary.costPaisa) %></div>
+        <div class="stat-label">Inventory cost</div>
+      </div></div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card app-card h-100"><div class="card-body stat-card">
+        <span class="stat-icon bg-<%= summary.profitPaisa < 0 ? 'danger' : 'success' %>-subtle text-<%= summary.profitPaisa < 0 ? 'danger' : 'success' %>">
+          <i class="bi bi-graph-<%= summary.profitPaisa < 0 ? 'down' : 'up' %>-arrow"></i>
+        </span>
+        <div class="stat-value <%= summary.profitPaisa < 0 ? 'text-danger' : 'text-success' %>"><%= formatPKR(summary.profitPaisa) %></div>
+        <div class="stat-label">Transfer profit</div>
+      </div></div>
+    </div>
+  <% } %>
+</div>
+
+<div class="card app-card mt-3">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle app-table mb-0">
+      <thead>
+        <tr>
+          <th>Transfer</th>
+          <th>Date</th>
+          <th>From</th>
+          <th>To</th>
+          <th class="text-end">Items</th>
+          <% if (canViewCosts) { %><th class="text-end">Inventory cost</th><% } %>
+          <th class="text-end">Branch value</th>
+          <% if (canViewCosts) { %><th class="text-end">Profit</th><% } %>
+          <th>Status</th>
+          <th>By</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (!transfers.length) { %>
+          <tr><td colspan="<%= canViewCosts ? 10 : 8 %>" class="text-center text-muted py-5">No stock transfers recorded.</td></tr>
+        <% } %>
+        <% transfers.forEach(function (transfer) {
+             var profit = Number(transfer.totalProfitPaisa || 0);
+             var hasTotals = transfer.totalBranchValuePaisa !== undefined && transfer.totalBranchValuePaisa !== null;
+        %>
+          <tr>
+            <td class="font-monospace fw-semibold">
+              <a href="/transfers/<%= transfer._id %>" class="text-decoration-none"><%= transfer.number %></a>
+            </td>
+            <td class="small text-muted"><%= formatDateTime(transfer.transferredAt) %></td>
+            <td><%= transfer.sourceBranch ? transfer.sourceBranch.name : '—' %></td>
+            <td><%= transfer.destinationBranch ? transfer.destinationBranch.name : '—' %></td>
+            <td class="text-end"><%= transfer.items.length %></td>
+            <% if (canViewCosts) { %>
+              <td class="text-end small text-muted"><%= hasTotals ? formatPKR(transfer.totalCostPaisa) : '—' %></td>
+            <% } %>
+            <td class="text-end fw-semibold"><%= hasTotals ? formatPKR(transfer.totalBranchValuePaisa) : '—' %></td>
+            <% if (canViewCosts) { %>
+              <td class="text-end fw-semibold <%= !hasTotals ? 'text-muted' : (profit < 0 ? 'text-danger' : (profit > 0 ? 'text-success' : 'text-muted')) %>">
+                <%= hasTotals ? formatPKR(profit) : '—' %>
+              </td>
+            <% } %>
+            <td><span class="badge text-bg-success"><%= transfer.status %></span></td>
+            <td class="small text-muted"><%= transfer.createdBy ? transfer.createdBy.name : '—' %></td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+</div>

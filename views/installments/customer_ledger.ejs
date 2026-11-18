@@ -1,0 +1,100 @@
+<%- include('../partials/page-header', {
+  heading: 'Installment Ledger — ' + customer.name,
+  subheading: customer.code + ' · ' + (customer.phone || '') + ' · ' + (customer.city || '') + ' · DISCO: ' + (customer.disco || '—'),
+  actions: [
+    { label: 'Download Statement PDF', url: '/installments/ledger/' + customer._id + '/pdf', icon: 'bi-file-earmark-pdf', class: 'btn-primary', target: '_blank' },
+    { label: 'Customer profile', url: '/customers/' + customer._id + '?tab=installments', icon: 'bi-person-badge', class: 'btn-outline-secondary' }
+  ]
+}) %>
+
+<!-- Summary Ribbon -->
+<div class="row g-2 mb-4 mt-1">
+  <div class="col-6 col-lg-3">
+    <div class="card app-card border-primary-subtle text-center p-3 h-100">
+      <div class="text-uppercase small text-muted fw-semibold">Contracted Value</div>
+      <div class="display-6 fw-bold text-dark"><%= formatPKR(summary.totalContractValuePaisa) %></div>
+      <div class="small text-muted">Financed: <%= formatPKR(summary.totalFinancedPaisa) %></div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card border-secondary-subtle text-center p-3 h-100">
+      <div class="text-uppercase small text-muted fw-semibold">Down Payments</div>
+      <div class="display-6 fw-bold text-secondary"><%= formatPKR(summary.totalDownPaymentsPaisa) %></div>
+      <div class="small text-muted">Advance bookings</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card border-success-subtle text-center p-3 h-100">
+      <div class="text-uppercase small text-muted fw-semibold">Total Recovered</div>
+      <div class="display-6 fw-bold text-success"><%= formatPKR(summary.totalPaidPaisa) %></div>
+      <div class="small text-muted">Paid receipts</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card border-danger-subtle text-center p-3 h-100">
+      <div class="text-uppercase small text-muted fw-semibold">Receivable Balance</div>
+      <div class="display-6 fw-bold text-danger"><%= formatPKR(summary.totalRemainingBalancePaisa) %></div>
+      <div class="small text-danger fw-semibold">Current ledger balance</div>
+    </div>
+  </div>
+</div>
+
+<!-- Ledger Transactions Card -->
+<div class="card app-card mb-4">
+  <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
+    <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+      <i class="bi bi-journal-text"></i> Financial Transaction Ledger &amp; Running Balance
+    </h3>
+    <span class="badge text-bg-light border text-muted">
+      <%= transactions.length %> Entries
+    </span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0 app-table">
+      <thead class="table-light">
+        <tr>
+          <th>Date</th>
+          <th>Transaction Type</th>
+          <th>Reference #</th>
+          <th>Description</th>
+          <th class="text-end" style="width: 140px;">Debit (PKR)</th>
+          <th class="text-end" style="width: 140px;">Credit (PKR)</th>
+          <th class="text-end" style="width: 150px;">Balance (PKR)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (transactions.length) { %>
+          <% transactions.forEach(function (tx) { %>
+            <tr>
+              <td class="small text-muted"><%= formatDate(tx.date) %></td>
+              <td>
+                <span class="fw-semibold text-dark"><%= tx.type %></span>
+              </td>
+              <td class="font-monospace small">
+                <% if (tx.type === 'Receipt') { %>
+                  <a href="/installments/receipts?search=<%= tx.reference %>"><%= tx.reference %></a>
+                <% } else { %>
+                  <%= tx.reference %>
+                <% } %>
+              </td>
+              <td class="small text-muted"><%= tx.description %></td>
+              <td class="text-end font-monospace <%= tx.debitPaisa ? 'fw-bold text-dark' : 'text-muted' %>">
+                <%= tx.debitPaisa ? formatPKR(tx.debitPaisa) : '—' %>
+              </td>
+              <td class="text-end font-monospace text-success <%= tx.creditPaisa ? 'fw-bold' : 'text-muted' %>">
+                <%= tx.creditPaisa ? formatPKR(tx.creditPaisa) : '—' %>
+              </td>
+              <td class="text-end font-monospace fw-bold <%= tx.runningBalancePaisa > 0 ? 'text-danger' : 'text-dark' %>">
+                <%= formatPKR(tx.runningBalancePaisa) %>
+              </td>
+            </tr>
+          <% }); %>
+        <% } else { %>
+          <tr>
+            <td colspan="7" class="text-center py-5 text-muted small">No financial ledger entries recorded yet.</td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>

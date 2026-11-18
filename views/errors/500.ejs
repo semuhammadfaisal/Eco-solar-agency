@@ -1,0 +1,18 @@
+<div class="error-card card border-0 shadow-lg">
+  <div class="card-body p-4 p-md-5 text-center">
+    <div class="error-code text-danger">500</div>
+    <h1 class="h3 fw-bold mb-2">Something went wrong</h1>
+    <p class="text-muted mb-4"><%= message %></p>
+    <div class="d-flex flex-wrap justify-content-center gap-2">
+      <a href="/dashboard" class="btn btn-primary"><i class="bi bi-speedometer2 me-1"></i>Dashboard</a>
+      <a href="/" class="btn btn-outline-secondary">Home</a>
+    </div>
+
+    <% if (typeof technical !== 'undefined' && technical) { %>
+      <details class="text-start mt-4">
+        <summary class="text-muted small">Technical details (development only)</summary>
+        <pre class="bg-dark text-light p-3 rounded mt-2 small text-wrap"><%= technical %></pre>
+      </details>
+    <% } %>
+  </div>
+</div>

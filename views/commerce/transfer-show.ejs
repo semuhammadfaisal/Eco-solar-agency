@@ -1,0 +1,179 @@
+<%
+  var totalQty = (transfer.items || []).reduce(function (sum, line) { return sum + Number(line.quantity || 0); }, 0);
+  var profit = Number(transfer.totalProfitPaisa || 0);
+  var hasTotals = transfer.totalBranchValuePaisa !== undefined && transfer.totalBranchValuePaisa !== null;
+%>
+
+<%- include('../partials/page-header', {
+  heading: transfer.number,
+  subheading: 'Transfer of ' + formatQty(totalQty) + ' unit(s) from ' +
+    (transfer.sourceBranch ? transfer.sourceBranch.name : 'source') + ' to ' +
+    (transfer.destinationBranch ? transfer.destinationBranch.name : 'destination') + '.',
+  actions: [
+    { label: 'Stock ledger', url: '/stock?search=' + encodeURIComponent(transfer.number), icon: 'bi-arrow-left-right', class: 'btn-outline-secondary' },
+    { label: 'All transfers', url: '/transfers', icon: 'bi-arrow-left', class: 'btn-outline-secondary' }
+  ]
+}) %>
+
+<div class="row g-3 mt-1">
+  <div class="col-6 col-lg-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-primary-subtle text-primary"><i class="bi bi-box-seam"></i></span>
+      <div class="stat-value"><%= formatQty(totalQty) %></div>
+      <div class="stat-label">Units transferred</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-info-subtle text-info-emphasis"><i class="bi bi-cash-stack"></i></span>
+      <div class="stat-value"><%= hasTotals ? formatPKR(transfer.totalBranchValuePaisa) : '—' %></div>
+      <div class="stat-label">Branch value</div>
+    </div></div>
+  </div>
+  <% if (canViewCosts) { %>
+    <div class="col-6 col-lg-3">
+      <div class="card app-card h-100"><div class="card-body stat-card">
+        <span class="stat-icon bg-secondary-subtle text-secondary-emphasis"><i class="bi bi-calculator"></i></span>
+        <div class="stat-value"><%= hasTotals ? formatPKR(transfer.totalCostPaisa) : '—' %></div>
+        <div class="stat-label">Inventory cost</div>
+      </div></div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card app-card h-100"><div class="card-body stat-card">
+        <span class="stat-icon bg-<%= profit < 0 ? 'danger' : 'success' %>-subtle text-<%= profit < 0 ? 'danger' : 'success' %>">
+          <i class="bi bi-graph-<%= profit < 0 ? 'down' : 'up' %>-arrow"></i>
+        </span>
+        <div class="stat-value <%= !hasTotals ? 'text-muted' : (profit < 0 ? 'text-danger' : 'text-success') %>"><%= hasTotals ? formatPKR(profit) : '—' %></div>
+        <div class="stat-label">Transfer profit</div>
+      </div></div>
+    </div>
+  <% } %>
+</div>
+
+<div class="row g-3 mt-1">
+  <div class="col-12 col-xl-8">
+    <div class="card app-card">
+      <div class="card-header bg-transparent d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <h2 class="h6 fw-semibold mb-0">Transfer lines</h2>
+        <span class="badge text-bg-success text-uppercase"><%= transfer.status %></span>
+      </div>
+      <div class="table-responsive">
+        <table class="table align-middle app-table mb-0">
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th class="text-end">Qty</th>
+              <% if (canViewCosts) { %><th class="text-end">Purchase price</th><% } %>
+              <th class="text-end">Branch price</th>
+              <% if (canViewCosts) { %><th class="text-end">Profit</th><% } %>
+              <th class="text-end">Branch total</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% (transfer.items || []).forEach(function (line) {
+                 var lineProfit = Number(line.profitPaisa || 0);
+                 var linePriced = line.branchPricePaisa !== undefined && line.branchPricePaisa !== null;
+                 var lineBranchTotal = Math.round(Number(line.branchPricePaisa || 0) * Number(line.quantity || 0));
+            %>
+              <tr>
+                <td>
+                  <div class="fw-semibold"><%= line.name || 'Item' %></div>
+                  <div class="small text-muted font-monospace"><%= line.sku || '—' %></div>
+                </td>
+                <td class="text-end"><%= formatQty(line.quantity) %> <span class="text-muted small"><%= line.unit || '' %></span></td>
+                <% if (canViewCosts) { %>
+                  <td class="text-end small text-muted"><%= formatPKR(line.unitCostPaisa) %></td>
+                <% } %>
+                <td class="text-end small"><%= linePriced ? formatPKR(line.branchPricePaisa) : '—' %></td>
+                <% if (canViewCosts) { %>
+                  <td class="text-end small fw-semibold <%= !linePriced ? 'text-muted' : (lineProfit < 0 ? 'text-danger' : (lineProfit > 0 ? 'text-success' : 'text-muted')) %>">
+                    <%= linePriced ? formatPKR(lineProfit) : '—' %>
+                  </td>
+                <% } %>
+                <td class="text-end fw-semibold"><%= linePriced ? formatPKR(lineBranchTotal) : '—' %></td>
+              </tr>
+            <% }); %>
+          </tbody>
+          <tfoot>
+            <tr>
+              <th colspan="<%= canViewCosts ? 4 : 3 %>" class="text-end text-uppercase small text-muted">Totals</th>
+              <% if (canViewCosts) { %>
+                <th class="text-end"><%= hasTotals ? formatPKR(transfer.totalProfitPaisa) : '—' %></th>
+              <% } %>
+              <th class="text-end"><%= hasTotals ? formatPKR(transfer.totalBranchValuePaisa) : '—' %></th>
+            </tr>
+            <% if (canViewCosts) { %>
+              <tr>
+                <td colspan="6" class="text-end small text-muted pt-0 border-0">
+                  <% if (hasTotals) { %>
+                    Inventory cost <span class="fw-semibold text-body"><%= formatPKR(transfer.totalCostPaisa) %></span>
+                    &nbsp;·&nbsp; Branch value <span class="fw-semibold text-body"><%= formatPKR(transfer.totalBranchValuePaisa) %></span>
+                    &nbsp;·&nbsp; Profit <span class="fw-semibold <%= profit < 0 ? 'text-danger' : 'text-success' %>"><%= formatPKR(profit) %></span>
+                  <% } else { %>
+                    This transfer was recorded before branch pricing was introduced.
+                  <% } %>
+                </td>
+              </tr>
+            <% } %>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <% if (transfer.notes) { %>
+      <div class="card app-card mt-3">
+        <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">Notes</h2></div>
+        <div class="card-body small" style="white-space:pre-line"><%= transfer.notes %></div>
+      </div>
+    <% } %>
+  </div>
+
+  <div class="col-12 col-xl-4">
+    <div class="card app-card">
+      <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">Transfer details</h2></div>
+      <div class="card-body p-4">
+        <dl class="row mb-0 small">
+          <dt class="col-5 text-muted fw-normal">Transfer no.</dt>
+          <dd class="col-7 font-monospace"><%= transfer.number %></dd>
+
+          <dt class="col-5 text-muted fw-normal">Date</dt>
+          <dd class="col-7"><%= formatDateTime(transfer.transferredAt) %></dd>
+
+          <dt class="col-5 text-muted fw-normal">From</dt>
+          <dd class="col-7">
+            <% if (transfer.sourceBranch) { %>
+              <%= transfer.sourceBranch.code %> — <%= transfer.sourceBranch.name %>
+            <% } else { %>—<% } %>
+          </dd>
+
+          <dt class="col-5 text-muted fw-normal">To</dt>
+          <dd class="col-7">
+            <% if (transfer.destinationBranch) { %>
+              <%= transfer.destinationBranch.code %> — <%= transfer.destinationBranch.name %>
+            <% } else { %>—<% } %>
+          </dd>
+
+          <dt class="col-5 text-muted fw-normal">Status</dt>
+          <dd class="col-7"><span class="badge text-bg-success"><%= transfer.status %></span></dd>
+
+          <dt class="col-5 text-muted fw-normal">Created by</dt>
+          <dd class="col-7"><%= transfer.createdBy ? transfer.createdBy.name : '—' %></dd>
+
+          <dt class="col-5 text-muted fw-normal">Received by</dt>
+          <dd class="col-7"><%= transfer.receivedBy ? transfer.receivedBy.name : '—' %></dd>
+
+          <dt class="col-5 text-muted fw-normal">Lines</dt>
+          <dd class="col-7"><%= (transfer.items || []).length %></dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="card app-card bg-light-subtle mt-3">
+      <div class="card-body small text-muted">
+        <i class="bi bi-info-circle me-1"></i>
+        Stock moved immediately when this transfer was saved. Open the stock ledger to see the paired
+        OUT and IN movements under reference <span class="font-monospace"><%= transfer.number %></span>.
+      </div>
+    </div>
+  </div>
+</div>

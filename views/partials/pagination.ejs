@@ -1,0 +1,48 @@
+<% if (typeof pagination !== 'undefined' && pagination && pagination.total > 0) { %>
+  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between px-3 py-3 border-top app-pagination">
+    <div class="text-muted small">
+      Showing <strong><%= pagination.from %></strong>–<strong><%= pagination.to %></strong>
+      of <strong><%= pagination.total %></strong>
+    </div>
+
+    <% if (pagination.totalPages > 1) { %>
+      <nav aria-label="Pagination">
+        <ul class="pagination pagination-sm mb-0">
+          <li class="page-item<%= pagination.hasPrev ? '' : ' disabled' %>">
+            <% if (pagination.hasPrev) { %>
+              <a class="page-link" href="<%= pageUrl(pagination.page - 1) %>" aria-label="Previous page">
+                <i class="bi bi-chevron-left"></i>
+              </a>
+            <% } else { %>
+              <span class="page-link" aria-hidden="true"><i class="bi bi-chevron-left"></i></span>
+            <% } %>
+          </li>
+
+          <% pagination.pages.forEach(function (page) { %>
+            <% if (page === '…') { %>
+              <li class="page-item disabled"><span class="page-link">…</span></li>
+            <% } else { %>
+              <li class="page-item<%= page === pagination.page ? ' active' : '' %>">
+                <% if (page === pagination.page) { %>
+                  <span class="page-link" aria-current="page"><%= page %></span>
+                <% } else { %>
+                  <a class="page-link" href="<%= pageUrl(page) %>"><%= page %></a>
+                <% } %>
+              </li>
+            <% } %>
+          <% }); %>
+
+          <li class="page-item<%= pagination.hasNext ? '' : ' disabled' %>">
+            <% if (pagination.hasNext) { %>
+              <a class="page-link" href="<%= pageUrl(pagination.page + 1) %>" aria-label="Next page">
+                <i class="bi bi-chevron-right"></i>
+              </a>
+            <% } else { %>
+              <span class="page-link" aria-hidden="true"><i class="bi bi-chevron-right"></i></span>
+            <% } %>
+          </li>
+        </ul>
+      </nav>
+    <% } %>
+  </div>
+<% } %>

@@ -1,0 +1,199 @@
+<%
+  var initialRole = old('role', user ? user.role : 'sales');
+  var initialStatus = old('isActive', user ? (user.isActive ? '1' : '0') : '1');
+%>
+
+<%- include('../partials/page-header', {
+  heading: isEdit ? 'Edit user' : 'Add user',
+  subheading: isEdit ? 'Update account details, role and access.' : 'Create a staff account and assign a role.',
+  actions: [{ label: 'Back to users', url: '/users', icon: 'bi-arrow-left', class: 'btn-outline-secondary' }]
+}) %>
+
+<div class="row g-3 g-lg-4 mt-1">
+  <div class="col-12 col-xl-8">
+    <div class="card app-card">
+      <div class="card-body p-4">
+        <%- include('../partials/form-errors') %>
+
+        <form method="POST" action="<%= formAction %>" novalidate>
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <% if (formMethod !== 'POST') { %>
+            <input type="hidden" name="_method" value="<%= formMethod %>">
+          <% } %>
+
+          <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Personal details</h2>
+
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <label for="name" class="form-label">Full name <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="name" name="name"
+                     value="<%= old('name', user ? user.name : '') %>"
+                     maxlength="120" required autocomplete="name">
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label for="phone" class="form-label">Phone</label>
+              <input type="tel" class="form-control" id="phone" name="phone"
+                     value="<%= old('phone', user ? user.phone : '') %>"
+                     maxlength="20" placeholder="03001234567" autocomplete="tel">
+            </div>
+
+            <div class="col-12">
+              <label for="email" class="form-label">Email address <span class="text-danger">*</span></label>
+              <input type="email" class="form-control" id="email" name="email"
+                     value="<%= old('email', user ? user.email : '') %>"
+                     maxlength="190" required autocomplete="email">
+              <div class="form-text">Used to sign in. Must be unique.</div>
+            </div>
+          </div>
+
+          <hr class="my-4">
+
+          <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Role &amp; access</h2>
+
+          <div class="row g-3" x-data="{ role: '<%= initialRole %>' }">
+            <div class="col-12 col-md-7">
+              <label for="role" class="form-label">Role <span class="text-danger">*</span></label>
+              <select class="form-select" id="role" name="role" x-model="role" required>
+                <% roles.forEach(function (role) { %>
+                  <option value="<%= role %>"<%= initialRole === role ? ' selected' : '' %>>
+                    <%= roleLabels[role] %>
+                  </option>
+                <% }); %>
+              </select>
+
+              <% roles.forEach(function (role) { %>
+                <div class="form-text" x-show="role === '<%= role %>'">
+                  <%= roleDescriptions[role] %>
+                </div>
+              <% }); %>
+            </div>
+
+            <div class="col-12 col-md-5">
+              <label for="isActive" class="form-label">Account status <span class="text-danger">*</span></label>
+              <select class="form-select" id="isActive" name="isActive" required>
+                <option value="1"<%= initialStatus === '1' ? ' selected' : '' %>>Active</option>
+                <option value="0"<%= initialStatus === '0' ? ' selected' : '' %>>Inactive</option>
+              </select>
+              <div class="form-text">Inactive users cannot sign in.</div>
+            </div>
+            <div class="col-12 col-md-7">
+              <label for="branch" class="form-label">Assigned branch</label>
+              <select class="form-select" id="branch" name="branch"><option value="">All branches / not restricted</option><% branches.forEach(function(branch){ %><option value="<%= branch._id %>" <%= user && String(user.branch || '') === String(branch._id) ? 'selected' : '' %>><%= branch.code %> — <%= branch.name %></option><% }) %></select>
+              <div class="form-text">Shopkeepers and branch sales users are restricted to this location.</div>
+            </div>
+          </div>
+
+          <% if (isEdit && isSelf) { %>
+            <div class="alert alert-warning small mt-3 mb-0">
+              <i class="bi bi-exclamation-triangle me-1"></i>
+              You cannot deactivate or delete your own account.
+            </div>
+          <% } %>
+
+          <hr class="my-4">
+
+          <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">
+            <%= isEdit ? 'Reset password' : 'Password' %>
+          </h2>
+
+          <% if (isEdit) { %>
+            <p class="text-muted small">
+              Leave both fields blank to keep the current password.
+              <a href="/users/<%= user._id %>/password">Use the dedicated reset page</a>
+              to also sign this user out of their other sessions.
+            </p>
+          <% } %>
+
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <label for="password" class="form-label">
+                <%= isEdit ? 'New password' : 'Password' %>
+                <% if (!isEdit) { %><span class="text-danger">*</span><% } %>
+              </label>
+              <input type="password" class="form-control" id="password" name="password"
+                     autocomplete="new-password" minlength="8"<%= isEdit ? '' : ' required' %>>
+              <div class="form-text">8–72 characters with at least one letter and one number.</div>
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label for="passwordConfirm" class="form-label">
+                Confirm <%= isEdit ? 'new ' : '' %>password
+                <% if (!isEdit) { %><span class="text-danger">*</span><% } %>
+              </label>
+              <input type="password" class="form-control" id="passwordConfirm" name="passwordConfirm"
+                     autocomplete="new-password" minlength="8"<%= isEdit ? '' : ' required' %>>
+            </div>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2 mt-4">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check2-circle me-1"></i><%= isEdit ? 'Save changes' : 'Create user' %>
+            </button>
+            <a href="/users" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-4">
+    <% if (isEdit) { %>
+      <div class="card app-card mb-3">
+        <div class="card-header bg-transparent">
+          <h2 class="h6 fw-semibold mb-0">Account information</h2>
+        </div>
+        <div class="card-body small">
+          <dl class="row mb-0">
+            <dt class="col-5 text-muted fw-normal">Created</dt>
+            <dd class="col-7"><%= formatDateTime(user.createdAt) %></dd>
+
+            <dt class="col-5 text-muted fw-normal">Last sign-in</dt>
+            <dd class="col-7"><%= formatDateTime(user.lastLoginAt) %></dd>
+
+            <dt class="col-5 text-muted fw-normal">Password changed</dt>
+            <dd class="col-7"><%= formatDateTime(user.passwordChangedAt) %></dd>
+
+            <dt class="col-5 text-muted fw-normal">Role</dt>
+            <dd class="col-7"><span class="badge text-bg-<%= user.roleBadge %>"><%= user.roleLabel %></span></dd>
+          </dl>
+        </div>
+      </div>
+
+      <% if (!isSelf) { %>
+        <div class="card app-card border-danger-subtle">
+          <div class="card-header bg-transparent">
+            <h2 class="h6 fw-semibold mb-0 text-danger">Danger zone</h2>
+          </div>
+          <div class="card-body">
+            <p class="small text-muted">
+              Deleting an account is a soft delete. The user is signed out and can no longer
+              access the system, but the record remains for audit history.
+            </p>
+            <button type="button" class="btn btn-outline-danger btn-sm"
+                    data-delete-url="/users/<%= user._id %>"
+                    data-delete-name="<%= user.name %>">
+              <i class="bi bi-trash me-1"></i>Delete user
+            </button>
+          </div>
+        </div>
+      <% } %>
+    <% } else { %>
+      <div class="card app-card">
+        <div class="card-header bg-transparent">
+          <h2 class="h6 fw-semibold mb-0">Role guide</h2>
+        </div>
+        <div class="card-body small">
+          <% roles.forEach(function (role) { %>
+            <div class="mb-3">
+              <span class="badge text-bg-<%= role === 'owner' ? 'danger' : role === 'manager' ? 'primary' : 'secondary' %> mb-1">
+                <%= roleLabels[role] %>
+              </span>
+              <div class="text-muted"><%= roleDescriptions[role] %></div>
+            </div>
+          <% }); %>
+        </div>
+      </div>
+    <% } %>
+  </div>
+</div>

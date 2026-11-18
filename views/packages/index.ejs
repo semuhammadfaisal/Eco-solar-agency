@@ -1,0 +1,131 @@
+<%- include('../partials/page-header', {
+  heading: 'Solar Packages',
+  subheading: 'Reusable system templates with default items, capacities, and installation costs.',
+  actions: can('packages.manage') ? [
+    { label: 'New package', url: '/packages/new', icon: 'bi-plus-lg', class: 'btn-primary' }
+  ] : []
+}) %>
+
+<div class="card app-card mt-3">
+  <div class="card-body p-3 p-md-4">
+    <form method="GET" action="/packages" class="row g-2 mb-3">
+      <div class="col-12 col-md-5">
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" class="form-control" name="search" placeholder="Search by name, code or description…" value="<%= filters.search %>">
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <select class="form-select" name="systemType" onchange="this.form.submit()">
+          <option value="">All system types</option>
+          <% systems.SYSTEM_TYPES.forEach(function (type) { %>
+            <option value="<%= type %>"<%= filters.systemType === type ? ' selected' : '' %>><%= systems.SYSTEM_TYPE_LABELS[type] %></option>
+          <% }); %>
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <select class="form-select" name="status" onchange="this.form.submit()">
+          <option value="">All statuses</option>
+          <option value="active"<%= filters.status === 'active' ? ' selected' : '' %>>Active</option>
+          <option value="inactive"<%= filters.status === 'inactive' ? ' selected' : '' %>>Inactive</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-2 d-flex gap-2">
+        <button type="submit" class="btn btn-outline-secondary w-100">Filter</button>
+        <% if (filters.search || filters.systemType || filters.status) { %>
+          <a href="/packages" class="btn btn-outline-danger" title="Clear filters"><i class="bi bi-x-lg"></i></a>
+        <% } %>
+      </div>
+    </form>
+
+    <% if (!packages || !packages.length) { %>
+      <div class="text-center py-5 text-muted">
+        <i class="bi bi-collection fs-1 d-block mb-2"></i>
+        <p class="mb-2">No packages found.</p>
+        <% if (can('packages.manage')) { %>
+          <a href="/packages/new" class="btn btn-sm btn-primary">Create the first package template</a>
+        <% } %>
+      </div>
+    <% } else { %>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle app-table mb-0">
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Package Name</th>
+              <th>Type</th>
+              <th>Capacity</th>
+              <th>Items</th>
+              <% if (can('costs.view')) { %>
+                <th>Overheads</th>
+              <% } %>
+              <th>Status</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% packages.forEach(function (pkg) { %>
+              <tr>
+                <td>
+                  <a href="/packages/<%= pkg._id %>" class="font-monospace fw-semibold"><%= pkg.code %></a>
+                </td>
+                <td>
+                  <a href="/packages/<%= pkg._id %>" class="fw-medium text-body"><%= pkg.name %></a>
+                  <% if (pkg.description) { %>
+                    <div class="text-muted small text-truncate" style="max-width:320px"><%= pkg.description %></div>
+                  <% } %>
+                </td>
+                <td>
+                  <span class="badge text-bg-<%= systems.SYSTEM_TYPE_BADGES[pkg.systemType] || 'secondary' %>">
+                    <%= systems.SYSTEM_TYPE_LABELS[pkg.systemType] || pkg.systemType %>
+                  </span>
+                </td>
+                <td>
+                  <span class="fw-bold text-success"><%= formatQty(pkg.capacityKw) %> kW</span>
+                </td>
+                <td>
+                  <span class="badge bg-light text-dark border">
+                    <%= pkg.items ? pkg.items.length : 0 %> <%= (pkg.items && pkg.items.length === 1) ? 'item' : 'items' %>
+                  </span>
+                </td>
+                <% if (can('costs.view')) { %>
+                  <td class="small text-muted">
+                    <div>Labor: <%= formatPKR(pkg.laborCostPaisa) %></div>
+                    <div>Transport: <%= formatPKR(pkg.transportCostPaisa) %></div>
+                    <% if (pkg.netMeteringCostPaisa) { %>
+                      <div>Net-metering: <%= formatPKR(pkg.netMeteringCostPaisa) %></div>
+                    <% } %>
+                  </td>
+                <% } %>
+                <td>
+                  <% if (pkg.isActive) { %>
+                    <span class="badge text-bg-success">Active</span>
+                  <% } else { %>
+                    <span class="badge text-bg-secondary">Inactive</span>
+                  <% } %>
+                </td>
+                <td class="text-end">
+                  <div class="btn-group btn-group-sm">
+                    <a href="/system-builder?package=<%= pkg._id %>" class="btn btn-outline-primary" title="Build system from template">
+                      <i class="bi bi-cpu me-1"></i>Build
+                    </a>
+                    <a href="/packages/<%= pkg._id %>" class="btn btn-outline-secondary" title="View details">
+                      <i class="bi bi-eye"></i>
+                    </a>
+                    <% if (can('packages.manage')) { %>
+                      <a href="/packages/<%= pkg._id %>/edit" class="btn btn-outline-secondary" title="Edit template">
+                        <i class="bi bi-pencil"></i>
+                      </a>
+                    <% } %>
+                  </div>
+                </td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+
+      <%- include('../partials/pagination', { pagination: pagination }) %>
+    <% } %>
+  </div>
+</div>

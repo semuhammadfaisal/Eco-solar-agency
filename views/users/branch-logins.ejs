@@ -1,0 +1,80 @@
+<%- include('../partials/page-header', {
+  heading: 'Branch logins',
+  subheading: 'One shared password per branch. A branch login only sees that branch workspace — POS, stock, transfers and the catalogue.',
+  actions: [{ label: 'Back to users', url: '/users', icon: 'bi-arrow-left', class: 'btn-outline-secondary' }]
+}) %>
+
+<div class="alert alert-info d-flex gap-2 mt-3" role="alert">
+  <i class="bi bi-info-circle-fill mt-1"></i>
+  <div class="small">
+    Branch logins are separate from staff accounts. Share the branch password only with that branch's team.
+    Resetting or disabling it signs out any open session for that branch.
+  </div>
+</div>
+
+<div class="card app-card mt-3">
+  <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+    <span class="small text-muted"><strong><%= branches.length %></strong> branch<%= branches.length === 1 ? '' : 'es' %></span>
+    <span class="small text-muted"><i class="bi bi-key me-1"></i>Passwords are stored hashed</span>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table app-table align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Branch</th>
+          <th>Status</th>
+          <th>Branch login</th>
+          <th>Last used</th>
+          <th>Password set</th>
+          <th class="text-end" style="width: 220px;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (!branches.length) { %>
+          <tr><td colspan="6" class="text-center text-muted py-4">No branches yet. Add a branch first.</td></tr>
+        <% } %>
+        <% branches.forEach(function (branch) { %>
+          <tr>
+            <td>
+              <div class="fw-semibold"><%= branch.name %></div>
+              <div class="small text-muted"><%= branch.code %><%= branch.city ? ' · ' + branch.city : '' %></div>
+            </td>
+            <td>
+              <span class="badge text-bg-<%= branch.isActive ? 'success' : 'secondary' %>"><%= branch.isActive ? 'Active' : 'Inactive' %></span>
+            </td>
+            <td>
+              <% if (branch.loginEnabled && branch.hasPassword) { %>
+                <span class="badge rounded-pill text-bg-success-subtle text-success-emphasis border border-success-subtle"><i class="bi bi-unlock me-1"></i>Enabled</span>
+              <% } else { %>
+                <span class="badge rounded-pill text-bg-secondary-subtle text-secondary-emphasis border"><i class="bi bi-lock me-1"></i>Disabled</span>
+              <% } %>
+            </td>
+            <td class="small text-muted">
+              <%= formatDateTime(branch.loginLastUsedAt) %>
+              <% if (branch.loginLastLoginIp) { %><div class="text-muted"><%= branch.loginLastLoginIp %></div><% } %>
+            </td>
+            <td class="small text-muted"><%= formatDateTime(branch.loginPasswordChangedAt) %></td>
+            <td class="text-end">
+              <div class="d-flex justify-content-end gap-1">
+                <a class="btn btn-sm <%= branch.hasPassword ? 'btn-outline-secondary' : 'btn-primary' %>"
+                   href="/users/branch-logins/<%= branch._id %>/password">
+                  <i class="bi bi-key me-1"></i><%= branch.hasPassword ? 'Reset' : 'Set password' %>
+                </a>
+                <% if (branch.loginEnabled || branch.hasPassword) { %>
+                  <form method="POST" action="/users/branch-logins/<%= branch._id %>/disable" class="d-inline"
+                        onsubmit="return confirm('Disable branch login for this branch? Any open branch session will be signed out.');">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Disable branch login">
+                      <i class="bi bi-slash-circle"></i>
+                    </button>
+                  </form>
+                <% } %>
+              </div>
+            </td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+</div>

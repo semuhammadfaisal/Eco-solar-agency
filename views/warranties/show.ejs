@@ -1,0 +1,179 @@
+<%- include('../partials/page-header', {
+  heading: 'Warranty Certificate ' + warranty.warrantyNumber,
+  subheading: (warranty.customer ? warranty.customer.name : 'Customer') + ' · ' + (installationsConfig.WARRANTY_TYPE_LABELS[warranty.warrantyType] || warranty.warrantyType),
+  actions: [
+    { label: 'Download Certificate PDF', url: '/warranties/' + warranty._id + '/certificate-pdf', icon: 'bi-file-earmark-pdf', class: 'btn-primary', attrs: 'target="_blank"' },
+    ...(can('warranty.manage') ? [{ label: 'Process Claim / Replacement', url: '#', icon: 'bi-arrow-left-right', class: 'btn-warning', attrs: 'data-bs-toggle="modal" data-bs-target="#claimModal"' }] : []),
+    { label: 'Back to warranties', url: '/warranties', icon: 'bi-arrow-left', class: 'btn-outline-secondary' }
+  ]
+}) %>
+
+<div class="row g-3 mt-1">
+
+  <!-- Left: Warranty Coverage Card -->
+  <div class="col-12 col-lg-7">
+    <div class="card app-card mb-3">
+      <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0 fw-bold"><i class="bi bi-shield-check text-success me-2"></i>Coverage & Equipment Specifications</h5>
+        <span class="badge text-bg-<%= installationsConfig.WARRANTY_STATUS_BADGES[warranty.status] || 'secondary' %>">
+          <%= installationsConfig.WARRANTY_STATUS_LABELS[warranty.status] || warranty.status %>
+        </span>
+      </div>
+      <div class="card-body p-3">
+        <dl class="row mb-0 small">
+          <dt class="col-sm-4 text-muted">Certificate #</dt>
+          <dd class="col-sm-8 font-monospace fw-bold"><%= warranty.warrantyNumber %></dd>
+
+          <dt class="col-sm-4 text-muted">Beneficiary Customer</dt>
+          <dd class="col-sm-8">
+            <% if (warranty.customer) { %>
+              <a href="/customers/<%= warranty.customer._id %>" class="fw-semibold text-decoration-none">
+                <%= warranty.customer.name %>
+              </a> (<%= warranty.customer.phone %>)
+            <% } else { %>—<% } %>
+          </dd>
+
+          <dt class="col-sm-4 text-muted">Installation Project</dt>
+          <dd class="col-sm-8">
+            <% if (warranty.installation) { %>
+              <a href="/installations/<%= warranty.installation._id %>" class="font-monospace text-decoration-none">
+                <%= warranty.installation.installationNumber %>
+              </a>
+            <% } else { %>Direct Supply / General<% } %>
+          </dd>
+
+          <dt class="col-sm-4 text-muted">Covered Equipment</dt>
+          <dd class="col-sm-8 fw-semibold"><%= warranty.item ? warranty.item.name : 'Component' %> (<%= warranty.item ? warranty.item.sku : '' %>)</dd>
+
+          <dt class="col-sm-4 text-muted">Active Serial Number</dt>
+          <dd class="col-sm-8">
+            <% if (warranty.serialString) { %>
+              <code class="fw-bold fs-6"><%= warranty.serialString %></code>
+            <% } else { %>Standard Turnkey Installation<% } %>
+          </dd>
+
+          <dt class="col-sm-4 text-muted">Warranty Type</dt>
+          <dd class="col-sm-8">
+            <span class="badge text-bg-<%= installationsConfig.WARRANTY_TYPE_BADGES[warranty.warrantyType] || 'secondary' %>">
+              <%= installationsConfig.WARRANTY_TYPE_LABELS[warranty.warrantyType] || warranty.warrantyType %>
+            </span>
+          </dd>
+
+          <dt class="col-sm-4 text-muted">Validity Duration</dt>
+          <dd class="col-sm-8">
+            <%= formatDate(warranty.startDate) %> to <strong><%= formatDate(warranty.endDate) %></strong>
+            (<%= warranty.years %> Years Coverage)
+          </dd>
+        </dl>
+
+        <% if (warranty.terms) { %>
+          <div class="mt-3 p-3 bg-light rounded small">
+            <strong class="d-block mb-1 text-muted text-uppercase">Terms & Conditions:</strong>
+            <%= warranty.terms %>
+          </div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Claims History & Claim Modal Trigger -->
+  <div class="col-12 col-lg-5">
+    <div class="card app-card mb-3">
+      <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0 fw-bold"><i class="bi bi-clock-history text-primary me-2"></i>Claims & Replacement History</h5>
+        <% if (can('warranty.manage')) { %>
+          <button type="button" class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#claimModal">
+            <i class="bi bi-plus-lg me-1"></i>New Claim
+          </button>
+        <% } %>
+      </div>
+      <div class="card-body p-3">
+        <% if (!warranty.claims || !warranty.claims.length) { %>
+          <div class="text-center py-4 text-muted small">
+            <i class="bi bi-check2-circle fs-3 d-block text-success mb-2"></i>
+            No warranty claims lodged against this certificate.
+          </div>
+        <% } else { %>
+          <% warranty.claims.forEach(function (cl) { %>
+            <div class="border-bottom pb-3 mb-3">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="badge text-bg-primary font-monospace"><%= cl.claimNumber %></span>
+                <span class="badge text-bg-<%= cl.claimStatus === 'approved' || cl.claimStatus === 'replaced' ? 'success' : 'warning' %>">
+                  <%= cl.claimStatus.toUpperCase() %>
+                </span>
+              </div>
+              <div class="small fw-semibold mt-1">Issue: <%= cl.issueDescription %></div>
+              <% if (cl.replacementSerial) { %>
+                <div class="small text-success mt-1">
+                  <i class="bi bi-arrow-left-right me-1"></i>
+                  Replaced serial <code><%= cl.oldSerial %></code> with <code><%= cl.replacementSerial %></code>
+                </div>
+              <% } %>
+              <% if (cl.resolutionNotes) { %>
+                <div class="small text-muted mt-1"><em><%= cl.resolutionNotes %></em></div>
+              <% } %>
+              <div class="text-muted small mt-1" style="font-size:0.75rem;">
+                Date: <%= formatDate(cl.claimDate) %>
+              </div>
+            </div>
+          <% }); %>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal: Lodge Warranty Claim -->
+<div class="modal fade" id="claimModal" tabindex="-1" aria-labelledby="claimModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="/warranties/<%= warranty._id %>/claim">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+        <div class="modal-header">
+          <h5 class="modal-title" id="claimModalLabel"><i class="bi bi-arrow-left-right text-warning me-2"></i>Lodge Warranty Claim</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Current Serial Number</label>
+            <input type="text" class="form-control form-control-sm bg-light" name="oldSerial"
+                   value="<%= warranty.serialString %>" readonly>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Fault / Failure Description *</label>
+            <textarea class="form-control form-control-sm" name="issueDescription" rows="3" required
+                      placeholder="Describe the defect, inverter error code, or performance degradation..."></textarea>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Replacement Serial from In-Stock Inventory (Optional)</label>
+            <select class="form-select form-select-sm" name="replacementSerialId">
+              <option value="">No replacement issued (Repair on site)</option>
+              <% inStockSerials.forEach(function (s) { %>
+                <option value="<%= s._id %>">
+                  Serial: <%= s.serial %> (Status: <%= s.status %>)
+                </option>
+              <% }); %>
+            </select>
+            <div class="form-text small">Selecting a replacement serial will mark the old unit defective and assign the new serial to this customer.</div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Resolution Notes</label>
+            <textarea class="form-control form-control-sm" name="resolutionNotes" rows="2"
+                      placeholder="e.g. Swapped with new inverter under manufacturer warranty exchange..."></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light border btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-warning btn-sm">Process Claim</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

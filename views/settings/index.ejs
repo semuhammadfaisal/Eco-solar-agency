@@ -1,0 +1,343 @@
+<%- include('../partials/page-header', {
+  heading: 'Company settings',
+  subheading: 'These details appear on quotations, invoices and throughout the application.'
+}) %>
+
+<div class="card app-card mt-3">
+  <div class="card-body p-4">
+    <%- include('../partials/form-errors') %>
+
+    <ul class="nav nav-tabs app-tabs mb-4" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tab-company-btn" data-bs-toggle="tab"
+                data-bs-target="#tab-company" type="button" role="tab" aria-controls="tab-company" aria-selected="true">
+          <i class="bi bi-building me-1"></i>Company
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-survey-btn" data-bs-toggle="tab"
+                data-bs-target="#tab-survey" type="button" role="tab" aria-controls="tab-survey" aria-selected="false">
+          <i class="bi bi-rulers me-1"></i>Survey sizing
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-pricing-btn" data-bs-toggle="tab"
+                data-bs-target="#tab-pricing" type="button" role="tab" aria-controls="tab-pricing" aria-selected="false">
+          <i class="bi bi-graph-up-arrow me-1"></i>Pricing &amp; Margins
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-drawer-btn" data-bs-toggle="tab"
+                data-bs-target="#tab-drawer" type="button" role="tab" aria-controls="tab-drawer" aria-selected="false">
+          <i class="bi bi-safe me-1"></i>Cash drawer
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-banking-btn" data-bs-toggle="tab"
+                data-bs-target="#tab-banking" type="button" role="tab" aria-controls="tab-banking" aria-selected="false">
+          <i class="bi bi-bank me-1"></i>Tax &amp; banking
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-terms-btn" data-bs-toggle="tab"
+                data-bs-target="#tab-terms" type="button" role="tab" aria-controls="tab-terms" aria-selected="false">
+          <i class="bi bi-file-text me-1"></i>Document terms
+        </button>
+      </li>
+    </ul>
+
+    <%# The CSRF token is also sent in the query string: this form is
+        multipart/form-data and CSRF is checked before multer parses the body. %>
+    <form method="POST" action="/settings?_method=PUT&_csrf=<%= encodeURIComponent(csrfToken) %>" enctype="multipart/form-data" novalidate>
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+      <div class="tab-content">
+        <!-- ================= Company ================= -->
+        <div class="tab-pane fade show active" id="tab-company" role="tabpanel" aria-labelledby="tab-company-btn">
+          <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Identity</h2>
+
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <label for="companyName" class="form-label">Company name <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="companyName" name="companyName"
+                     value="<%= old('companyName', settings.companyName) %>" maxlength="150" required>
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label for="legalName" class="form-label">Registered legal name</label>
+              <input type="text" class="form-control" id="legalName" name="legalName"
+                     value="<%= old('legalName', settings.legalName) %>" maxlength="150"
+                     placeholder="As printed on tax documents">
+            </div>
+
+            <div class="col-12">
+              <label class="form-label d-block">Company logo</label>
+              <div class="d-flex flex-wrap align-items-start gap-3"
+                   x-data="{ preview: '<%= settings.logoPath || '' %>' }">
+                <div class="settings-logo-box">
+                  <template x-if="preview">
+                    <img :src="preview" alt="Company logo" class="settings-logo-preview">
+                  </template>
+                  <div class="text-muted small text-center p-3" x-show="!preview">
+                    <i class="bi bi-image fs-3 d-block mb-1"></i>No logo
+                  </div>
+                </div>
+
+                <div class="flex-grow-1" style="min-width:240px">
+                  <input type="file" class="form-control" id="logo" name="logo"
+                         accept="image/png,image/jpeg,image/webp,image/gif"
+                         @change="preview = $event.target.files[0] ? URL.createObjectURL($event.target.files[0]) : preview">
+                  <div class="form-text">
+                    JPG, PNG, WEBP or GIF. Maximum 2 MB. Recommended height 64–128 px.
+                  </div>
+
+                  <% if (settings.logoPath) { %>
+                    <div class="form-check mt-2">
+                      <input class="form-check-input" type="checkbox" id="removeLogo" name="removeLogo" value="1"
+                             @change="if ($event.target.checked) preview = ''">
+                      <label class="form-check-label small text-danger" for="removeLogo">
+                        Remove the current logo
+                      </label>
+                    </div>
+                  <% } %>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <hr class="my-4">
+
+          <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Contact</h2>
+
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <label for="email" class="form-label">Company email</label>
+              <input type="email" class="form-control" id="email" name="email"
+                     value="<%= old('email', settings.email) %>" maxlength="190">
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label for="website" class="form-label">Website</label>
+              <input type="text" class="form-control" id="website" name="website"
+                     value="<%= old('website', settings.website) %>" maxlength="190"
+                     placeholder="www.example.com">
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label for="phone" class="form-label">Phone</label>
+              <input type="tel" class="form-control" id="phone" name="phone"
+                     value="<%= old('phone', settings.phone) %>" maxlength="30" placeholder="042-1234567">
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label for="phoneAlt" class="form-label">Alternate phone</label>
+              <input type="tel" class="form-control" id="phoneAlt" name="phoneAlt"
+                     value="<%= old('phoneAlt', settings.phoneAlt) %>" maxlength="30" placeholder="03001234567">
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label for="city" class="form-label">City</label>
+              <input type="text" class="form-control" id="city" name="city"
+                     value="<%= old('city', settings.city) %>" maxlength="80" placeholder="Lahore">
+            </div>
+
+            <div class="col-12 col-md-8">
+              <label for="address" class="form-label">Address</label>
+              <textarea class="form-control" id="address" name="address" rows="2" maxlength="500"
+                        placeholder="Street, area, city"><%= old('address', settings.address) %></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= Tax & banking ================= -->
+        <div class="tab-pane fade" id="tab-banking" role="tabpanel" aria-labelledby="tab-banking-btn">
+          <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Tax identifiers</h2>
+
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <label for="ntn" class="form-label">NTN</label>
+              <input type="text" class="form-control" id="ntn" name="ntn"
+                     value="<%= old('ntn', settings.ntn) %>" maxlength="30">
+              <div class="form-text">National Tax Number.</div>
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label for="strn" class="form-label">STRN</label>
+              <input type="text" class="form-control" id="strn" name="strn"
+                     value="<%= old('strn', settings.strn) %>" maxlength="30">
+              <div class="form-text">Sales Tax Registration Number.</div>
+            </div>
+          </div>
+
+          <hr class="my-4">
+
+          <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Bank account</h2>
+
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <label for="bankName" class="form-label">Bank name</label>
+              <input type="text" class="form-control" id="bankName" name="bankName"
+                     value="<%= old('bankName', settings.bankName) %>" maxlength="120">
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label for="bankBranch" class="form-label">Branch</label>
+              <input type="text" class="form-control" id="bankBranch" name="bankBranch"
+                     value="<%= old('bankBranch', settings.bankBranch) %>" maxlength="120">
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label for="bankAccountTitle" class="form-label">Account title</label>
+              <input type="text" class="form-control" id="bankAccountTitle" name="bankAccountTitle"
+                     value="<%= old('bankAccountTitle', settings.bankAccountTitle) %>" maxlength="150">
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label for="bankAccountNumber" class="form-label">Account number</label>
+              <input type="text" class="form-control" id="bankAccountNumber" name="bankAccountNumber"
+                     value="<%= old('bankAccountNumber', settings.bankAccountNumber) %>" maxlength="60">
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label for="bankIban" class="form-label">IBAN</label>
+              <input type="text" class="form-control" id="bankIban" name="bankIban"
+                     value="<%= old('bankIban', settings.bankIban) %>" maxlength="60"
+                     placeholder="PK00XXXX0000000000000000">
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= Terms ================= -->
+        <div class="tab-pane fade" id="tab-drawer" role="tabpanel" aria-labelledby="tab-drawer-btn">
+          <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Business day &amp; cash drawer</h2>
+          <p class="text-muted small">
+            Each branch gets one cash drawer per business date. The drawer opens automatically at the start time
+            and the closing-time popup appears after the end time until the drawer is closed.
+          </p>
+          <div class="row g-3">
+            <div class="col-12 col-md-4">
+              <label for="businessDayStart" class="form-label">Business day starts at</label>
+              <input type="time" class="form-control" id="businessDayStart" name="businessDayStart"
+                     value="<%= old('businessDayStart', settings.businessDayStart || '09:00') %>" required>
+              <div class="form-text">Drawers are opened for every active branch after this time.</div>
+            </div>
+            <div class="col-12 col-md-4">
+              <label for="businessDayEnd" class="form-label">Business day closes at</label>
+              <input type="time" class="form-control" id="businessDayEnd" name="businessDayEnd"
+                     value="<%= old('businessDayEnd', settings.businessDayEnd || '21:00') %>" required>
+              <div class="form-text">If this is earlier than the start time, the window crosses midnight.</div>
+            </div>
+            <div class="col-12 col-md-4">
+              <label for="defaultOpeningFloat" class="form-label">Default opening float (PKR)</label>
+              <input type="text" class="form-control" id="defaultOpeningFloat" name="defaultOpeningFloat"
+                     value="<%= old('defaultOpeningFloat', (settings.defaultOpeningFloatPaisa || 0) / 100) %>">
+              <div class="form-text">Used only when there is no previous closed drawer for the branch.</div>
+            </div>
+          </div>
+
+          <div class="form-check form-switch mt-4">
+            <input type="hidden" name="dailyClosingReminderEnabled" value="0">
+            <input class="form-check-input" type="checkbox" role="switch" id="dailyClosingReminderEnabled"
+                   name="dailyClosingReminderEnabled" value="1"
+                   <%= settings.dailyClosingReminderEnabled ? 'checked' : '' %>>
+            <label class="form-check-label" for="dailyClosingReminderEnabled">
+              Show the closing-time reminder popup on every page until the drawer is closed
+            </label>
+            <div class="form-text">Snoozing hides it for 30 minutes for the current session.</div>
+          </div>
+
+          <div class="alert alert-light border mt-4 mb-0 small">
+            <i class="bi bi-clock-history me-1"></i>
+            Times are interpreted in the company timezone (<strong><%= settings.timezone %></strong>).
+            Closing freezes the day's figures and posts any variance to <strong>6070 Cash Over &amp; Short</strong>.
+          </div>
+        </div>
+
+        <div class="tab-pane fade" id="tab-terms" role="tabpanel" aria-labelledby="tab-terms-btn">
+          <div class="row g-3">
+            <div class="col-12 col-xl-6">
+              <label for="quotationTerms" class="form-label">Default quotation terms</label>
+              <textarea class="form-control" id="quotationTerms" name="quotationTerms" rows="10"
+                        maxlength="3000"><%= old('quotationTerms', settings.quotationTerms) %></textarea>
+              <div class="form-text">Printed on every new quotation. One term per line.</div>
+            </div>
+
+            <div class="col-12 col-xl-6">
+              <label for="invoiceTerms" class="form-label">Default invoice terms</label>
+              <textarea class="form-control" id="invoiceTerms" name="invoiceTerms" rows="10"
+                        maxlength="3000"><%= old('invoiceTerms', settings.invoiceTerms) %></textarea>
+              <div class="form-text">Printed on invoices.</div>
+            </div>
+          </div>
+
+          <div class="alert alert-light border mt-4 mb-0 small">
+            <i class="bi bi-currency-exchange me-1"></i>
+            Currency is fixed to <strong><%= settings.currency %></strong> and timezone to
+            <strong><%= settings.timezone %></strong> for this deployment.
+          </div>
+        </div>
+
+        <div class="tab-pane fade" id="tab-survey" role="tabpanel" aria-labelledby="tab-survey-btn">
+          <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">System-size suggestion</h2>
+          <p class="text-muted small">Used by the site survey form to convert average monthly electricity units into a suggested solar system size.</p>
+          <div class="row g-3">
+            <div class="col-12 col-md-4">
+              <label for="surveyMonthlyUnitsPerKw" class="form-label">Monthly units per installed kW</label>
+              <input type="number" class="form-control" id="surveyMonthlyUnitsPerKw" name="surveyMonthlyUnitsPerKw" min="1" max="1000" step="0.1" value="<%= old('surveyMonthlyUnitsPerKw', settings.surveyMonthlyUnitsPerKw || 120) %>" required>
+            </div>
+            <div class="col-12 col-md-4">
+              <label for="surveySizingBufferPercent" class="form-label">Design buffer (%)</label>
+              <input type="number" class="form-control" id="surveySizingBufferPercent" name="surveySizingBufferPercent" min="0" max="100" step="0.1" value="<%= old('surveySizingBufferPercent', settings.surveySizingBufferPercent || 15) %>" required>
+            </div>
+            <div class="col-12 col-md-4">
+              <label for="surveySizeStepKw" class="form-label">Round up to (kW)</label>
+              <input type="number" class="form-control" id="surveySizeStepKw" name="surveySizeStepKw" min="0.1" max="10" step="0.1" value="<%= old('surveySizeStepKw', settings.surveySizeStepKw || 0.5) %>" required>
+            </div>
+          </div>
+          <div class="alert alert-light border mt-3 mb-0 small">
+            Formula: <strong>(average monthly units / units per kW) x (1 + buffer)</strong>, rounded up to the configured size step.
+          </div>
+        </div>
+
+        <div class="tab-pane fade" id="tab-pricing" role="tabpanel" aria-labelledby="tab-pricing-btn">
+          <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Profit &amp; Discount Controls</h2>
+          <p class="text-muted small">Controls thresholds for low-margin warnings, discount approvals, and default system installation overheads.</p>
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <label for="minMarginPercent" class="form-label">Minimum Profit Margin (%)</label>
+              <input type="number" class="form-control" id="minMarginPercent" name="minMarginPercent" min="0" max="100" step="0.5" value="<%= old('minMarginPercent', settings.minMarginPercent || 10) %>">
+              <div class="form-text">System builder triggers a low-margin warning if net profit % is below this value.</div>
+            </div>
+            <div class="col-12 col-md-6">
+              <label for="maxDiscountPercentWithoutApproval" class="form-label">Max Discount (%) Without Owner Approval</label>
+              <input type="number" class="form-control" id="maxDiscountPercentWithoutApproval" name="maxDiscountPercentWithoutApproval" min="0" max="100" step="0.5" value="<%= old('maxDiscountPercentWithoutApproval', settings.maxDiscountPercentWithoutApproval || 5) %>">
+              <div class="form-text">Discounts above this percentage require explicit owner approval before saving.</div>
+            </div>
+            <div class="col-12 col-md-4">
+              <label for="defaultLaborCost" class="form-label">Default Labor Cost (PKR)</label>
+              <input type="text" class="form-control" id="defaultLaborCost" name="defaultLaborCost" value="<%= old('defaultLaborCost', (settings.defaultLaborCostPaisa || 0) / 100) %>">
+              <div class="form-text">Default installation labor cost for packages.</div>
+            </div>
+            <div class="col-12 col-md-4">
+              <label for="defaultTransportCost" class="form-label">Default Transport Cost (PKR)</label>
+              <input type="text" class="form-control" id="defaultTransportCost" name="defaultTransportCost" value="<%= old('defaultTransportCost', (settings.defaultTransportCostPaisa || 0) / 100) %>">
+              <div class="form-text">Default transportation/delivery cost.</div>
+            </div>
+            <div class="col-12 col-md-4">
+              <label for="defaultNetMeteringCost" class="form-label">Default Net-Metering Cost (PKR)</label>
+              <input type="text" class="form-control" id="defaultNetMeteringCost" name="defaultNetMeteringCost" value="<%= old('defaultNetMeteringCost', (settings.defaultNetMeteringCostPaisa || 0) / 100) %>">
+              <div class="form-text">Default DISCO net-metering application & processing fee.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex flex-wrap gap-2 mt-4 pt-3 border-top">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check2-circle me-1"></i>Save settings
+        </button>
+        <a href="/dashboard" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>

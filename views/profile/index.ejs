@@ -1,0 +1,82 @@
+<%- include('../partials/page-header', {
+  heading: 'My profile',
+  subheading: 'Manage your personal contact details and account security.'
+}) %>
+
+<div class="row g-4 mt-1">
+  <div class="col-12 col-xl-7">
+    <div class="card app-card">
+      <div class="card-header bg-transparent">
+        <h2 class="h6 mb-0"><i class="bi bi-person-vcard me-2"></i>Personal details</h2>
+      </div>
+      <div class="card-body p-4">
+        <%- include('../partials/form-errors') %>
+
+        <form method="POST" action="/profile" novalidate>
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input type="hidden" name="_method" value="PUT">
+
+          <div class="mb-3">
+            <label for="name" class="form-label">Full name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="name" name="name"
+                   value="<%= old('name', profile.name) %>" maxlength="120"
+                   autocomplete="name" required>
+          </div>
+
+          <div class="mb-3">
+            <label for="email" class="form-label">Email address <span class="text-danger">*</span></label>
+            <input type="email" class="form-control" id="email" name="email"
+                   value="<%= old('email', profile.email) %>" maxlength="190"
+                   autocomplete="email" required>
+            <div class="form-text">This email is used when you sign in.</div>
+          </div>
+
+          <div class="mb-4">
+            <label for="phone" class="form-label">Phone number</label>
+            <input type="tel" class="form-control" id="phone" name="phone"
+                   value="<%= old('phone', profile.phone || '') %>" maxlength="20"
+                   autocomplete="tel" placeholder="03001234567">
+          </div>
+
+          <div class="d-flex flex-wrap gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check2-circle me-1"></i>Save profile
+            </button>
+            <a href="/dashboard" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-5">
+    <div class="card app-card mb-4">
+      <div class="card-body p-4 text-center">
+        <span class="avatar d-inline-flex mb-3" style="width:72px;height:72px;font-size:1.5rem">
+          <%= profile.initials %>
+        </span>
+        <h2 class="h5 mb-1"><%= profile.name %></h2>
+        <div class="text-muted mb-3"><%= profile.email %></div>
+        <span class="badge text-bg-<%= profile.roleBadge %>"><%= profile.roleLabel %></span>
+        <span class="badge text-bg-<%= profile.isActive ? 'success' : 'secondary' %> ms-1">
+          <%= profile.isActive ? 'Active' : 'Inactive' %>
+        </span>
+        <div class="small text-muted mt-3">
+          Role and account status can only be changed by an owner.
+        </div>
+      </div>
+    </div>
+
+    <div class="card app-card">
+      <div class="card-header bg-transparent">
+        <h2 class="h6 mb-0"><i class="bi bi-shield-lock me-2"></i>Account security</h2>
+      </div>
+      <div class="card-body p-4">
+        <p class="text-muted small">Change your password using your current password for verification.</p>
+        <a href="/change-password" class="btn btn-outline-primary w-100">
+          <i class="bi bi-key me-1"></i>Change password
+        </a>
+      </div>
+    </div>
+  </div>
+</div>

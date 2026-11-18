@@ -1,0 +1,165 @@
+<%- include('../partials/page-header', {
+  heading: 'Financial & Accounting Overview',
+  subheading: 'Real-time double-entry general ledger, liquid cash balances, receivables, payables, and period profitability.',
+  actions: [
+    { label: 'Record Expense', url: '/accounting/expenses', icon: 'bi-wallet2', class: 'btn-primary' },
+    { label: 'Pay Supplier', url: '/accounting/supplier-payments', icon: 'bi-credit-card', class: 'btn-outline-dark' },
+    { label: 'Daily Closing', url: '/accounting/daily-closing', icon: 'bi-clock-history', class: 'btn-outline-secondary' }
+  ]
+}) %>
+
+<!-- KPI Metric Cards -->
+<div class="row g-3 mb-4">
+  <div class="col-12 col-sm-6 col-xl-3">
+    <div class="card app-card stat-card h-100 border-start border-4 border-success">
+      <div class="card-body">
+        <div class="stat-icon text-bg-success-subtle text-success"><i class="bi bi-cash-stack"></i></div>
+        <div class="stat-value text-success"><%= formatPKR(stats.cashInHandPaisa) %></div>
+        <div class="stat-label">Cash in Hand (Counter &amp; Safe)</div>
+        <div class="mt-2"><a href="/accounting/cash-book" class="small text-decoration-none">Open Cash Book &rarr;</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-sm-6 col-xl-3">
+    <div class="card app-card stat-card h-100 border-start border-4 border-primary">
+      <div class="card-body">
+        <div class="stat-icon text-bg-primary-subtle text-primary"><i class="bi bi-bank"></i></div>
+        <div class="stat-value text-primary"><%= formatPKR(stats.bankBalancePaisa) %></div>
+        <div class="stat-label">Bank Alfalah (Account 1020)</div>
+        <div class="mt-2"><a href="/accounting/bank-book" class="small text-decoration-none">Open Bank Book &rarr;</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-sm-6 col-xl-3">
+    <div class="card app-card stat-card h-100 border-start border-4 border-info">
+      <div class="card-body">
+        <div class="stat-icon text-bg-info-subtle text-info"><i class="bi bi-arrow-down-left-circle"></i></div>
+        <div class="stat-value text-dark"><%= formatPKR(stats.totalReceivablesPaisa) %></div>
+        <div class="stat-label">Accounts Receivable (AR)</div>
+        <div class="mt-2"><a href="/accounting/receivables" class="small text-decoration-none">View Customer Balances &rarr;</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-sm-6 col-xl-3">
+    <div class="card app-card stat-card h-100 border-start border-4 border-warning">
+      <div class="card-body">
+        <div class="stat-icon text-bg-warning-subtle text-warning"><i class="bi bi-arrow-up-right-circle"></i></div>
+        <div class="stat-value text-warning-emphasis"><%= formatPKR(stats.totalPayablesPaisa) %></div>
+        <div class="stat-label">Accounts Payable (Suppliers)</div>
+        <div class="mt-2"><a href="/accounting/payables" class="small text-decoration-none">View Vendor Bills &rarr;</a></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Month Profitability Summary -->
+<div class="card app-card mb-4 shadow-sm">
+  <div class="card-header bg-body-tertiary py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-graph-up-arrow fs-5 text-success"></i>
+      <h2 class="h6 fw-bold mb-0">Current Month Operational Performance</h2>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="/accounting/profit-loss" class="btn btn-sm btn-outline-success">
+        <i class="bi bi-file-earmark-text me-1"></i>Full P&amp;L Statement
+      </a>
+      <a href="/accounting/trial-balance" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-scale me-1"></i>Trial Balance
+      </a>
+    </div>
+  </div>
+  <div class="card-body p-4">
+    <div class="row g-4 text-center">
+      <div class="col-6 col-md-3 border-end">
+        <div class="text-muted small text-uppercase fw-semibold mb-1">Gross Invoiced Revenue</div>
+        <div class="fs-4 fw-bold text-dark"><%= formatPKR(stats.monthRevenuePaisa) %></div>
+        <div class="small text-muted">Solar turnkey contracts &amp; services</div>
+      </div>
+      <div class="col-6 col-md-3 border-end">
+        <div class="text-muted small text-uppercase fw-semibold mb-1">Cost of Goods Sold (COGS)</div>
+        <div class="fs-4 fw-bold text-danger"><%= formatPKR(stats.monthCogsPaisa) %></div>
+        <div class="small text-muted">Hardware, direct labor &amp; freight</div>
+      </div>
+      <div class="col-6 col-md-3 border-end">
+        <div class="text-muted small text-uppercase fw-semibold mb-1">Operating Expenses (OPEX)</div>
+        <div class="fs-4 fw-bold text-warning-emphasis"><%= formatPKR(stats.monthOperatingExpensePaisa) %></div>
+        <div class="small text-muted">Salaries, commission, rent &amp; fuel</div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="text-muted small text-uppercase fw-semibold mb-1">Net Operating Profit</div>
+        <div class="fs-4 fw-bold <%= stats.monthNetProfitPaisa >= 0 ? 'text-success' : 'text-danger' %>">
+          <%= formatPKR(stats.monthNetProfitPaisa) %>
+        </div>
+        <div class="badge <%= stats.monthNetProfitPaisa >= 0 ? 'text-bg-success-subtle text-success' : 'text-bg-danger-subtle text-danger' %>">
+          <%= stats.netMarginPercent %>% Net Margin
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Module Navigation & Ledger Status -->
+<div class="row g-4">
+  <div class="col-12 col-lg-8">
+    <div class="card app-card shadow-sm h-100">
+      <div class="card-header bg-body-tertiary py-3">
+        <h2 class="h6 fw-bold mb-0"><i class="bi bi-journal-bookmark me-2"></i>Financial Reports &amp; Statements</h2>
+      </div>
+      <div class="card-body p-0">
+        <div class="list-group list-group-flush">
+          <a href="/accounting/trial-balance" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3">
+            <div>
+              <div class="fw-bold"><i class="bi bi-scale text-primary me-2"></i>Trial Balance Verification</div>
+              <div class="small text-muted">Verifies that total debits equal total credits across all 15 solar chart of accounts.</div>
+            </div>
+            <span class="badge <%= trialBalance.isBalanced ? 'bg-success' : 'bg-danger' %> rounded-pill px-3 py-2">
+              <%= trialBalance.isBalanced ? 'Balanced ✓' : 'Discrepancy ⚠' %>
+            </span>
+          </a>
+          <a href="/accounting/profit-loss" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3">
+            <div>
+              <div class="fw-bold"><i class="bi bi-graph-up text-success me-2"></i>Profit &amp; Loss Statement</div>
+              <div class="small text-muted">Revenue, Cost of Goods Sold, Gross Margin, and Net Operating Margin by date range.</div>
+            </div>
+            <i class="bi bi-chevron-right text-muted"></i>
+          </a>
+          <a href="/accounting/daily-closing" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3">
+            <div>
+              <div class="fw-bold"><i class="bi bi-clock-history text-secondary me-2"></i>Daily Closing &amp; Safe Reconciliation</div>
+              <div class="small text-muted">Physical cash-in-drawer tally, end-of-day bank balance, and manager sign-off.</div>
+            </div>
+            <i class="bi bi-chevron-right text-muted"></i>
+          </a>
+          <a href="/accounting/salary-sheet" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3">
+            <div>
+              <div class="fw-bold"><i class="bi bi-person-lines-fill text-info me-2"></i>Staff Salary &amp; Sales Commission Sheet</div>
+              <div class="small text-muted">Monthly payroll calculations, attendance days, sales commission disbursement, and receipts.</div>
+            </div>
+            <i class="bi bi-chevron-right text-muted"></i>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-4">
+    <div class="card app-card shadow-sm h-100">
+      <div class="card-header bg-body-tertiary py-3">
+        <h2 class="h6 fw-bold mb-0"><i class="bi bi-lightning-charge me-2"></i>Automated Double-Entry Rules</h2>
+      </div>
+      <div class="card-body small">
+        <p class="text-muted mb-3">All double-entry journal entries are posted automatically in real time:</p>
+        <ul class="list-unstyled mb-0 d-flex flex-column gap-2">
+          <li class="p-2 bg-light rounded border"><strong class="text-dark">Sale Approved:</strong> Dr AR (1030) | Cr Sales (4010) + Dr COGS (5010) | Cr Inventory (1040)</li>
+          <li class="p-2 bg-light rounded border"><strong class="text-dark">Installment Paid:</strong> Dr Cash/Bank (1010/1020) | Cr AR (1030)</li>
+          <li class="p-2 bg-light rounded border"><strong class="text-dark">Purchase GRN:</strong> Dr Inventory (1040) | Cr AP (2010)</li>
+          <li class="p-2 bg-light rounded border"><strong class="text-dark">Supplier Payment:</strong> Dr AP (2010) | Cr Cash/Bank (1010/1020)</li>
+          <li class="p-2 bg-light rounded border"><strong class="text-dark">Expense Logged:</strong> Dr OPEX (6010-6060) | Cr Cash/Bank (1010/1020)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>

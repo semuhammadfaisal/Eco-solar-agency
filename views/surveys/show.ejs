@@ -1,0 +1,24 @@
+<% var contact = survey.customer || {}; %>
+<%- include('../partials/page-header', {
+  heading: survey.number,
+  subheading: (contact.name || contact.contactName || 'Site survey') + ' · ' + formatDateTime(survey.scheduledAt),
+  actions: [
+    { label: 'PDF report', url: '/surveys/' + survey._id + '/report.pdf', icon: 'bi-file-earmark-pdf', class: 'btn-outline-danger' },
+    { label: 'Build solar system', url: '/system-builder?survey=' + survey._id, icon: 'bi-cpu', class: 'btn-primary' }
+  ].concat(canPerform ? [{ label: 'Open survey form', url: '/surveys/' + survey._id + '/edit', icon: 'bi-pencil-square', class: 'btn-primary' }] : [])
+}) %>
+<div class="row g-3 mt-1">
+  <div class="col-12 col-xl-8">
+    <div class="card app-card mb-3"><div class="card-body"><div class="d-flex justify-content-between align-items-start gap-3"><div><h2 class="h5 mb-1"><%= contact.name || contact.contactName || 'Unlinked contact' %></h2><div class="text-muted"><%= contact.phone || '' %></div><div class="text-muted small"><%= [contact.address, contact.area, contact.city].filter(Boolean).join(', ') %></div></div><span class="badge text-bg-<%= surveys.SURVEY_STATUS_BADGES[survey.status] %>"><%= surveys.SURVEY_STATUS_LABELS[survey.status] %></span></div></div></div>
+    <div class="card app-card mb-3"><div class="card-header bg-transparent"><h2 class="h6 mb-0">Roof and electrical details</h2></div><div class="card-body"><div class="row g-3">
+      <% [['Roof type', surveys.ROOF_TYPE_LABELS[survey.roofType] || survey.roofType],['Usable area', survey.roofAreaSqFt ? formatQty(survey.roofAreaSqFt) + ' sq ft' : '—'],['Direction / tilt', (survey.direction || '—') + ' / ' + (survey.tiltDegrees !== null ? survey.tiltDegrees + '°' : '—')],['Shading', survey.shading],['Structure', survey.structureType],['Floor height', survey.floorHeight ? survey.floorHeight + ' ft' : '—'],['Sanctioned load', survey.sanctionedLoadKw ? survey.sanctionedLoadKw + ' kW' : '—'],['Phase / meter', (survey.phase || '—') + ' / ' + (survey.meterType || '—')],['Cable distance', survey.cableDistanceMeters ? survey.cableDistanceMeters + ' m' : '—']].forEach(function (row) { %><div class="col-6 col-md-4"><div class="small text-muted"><%= row[0] %></div><div class="fw-medium text-capitalize"><%= String(row[1] || '—').replace(/_/g, ' ') %></div></div><% }) %>
+    </div></div></div>
+    <div class="card app-card mb-3"><div class="card-header bg-transparent"><h2 class="h6 mb-0">12-month usage</h2></div><div class="card-body"><div class="row g-2"><% (survey.monthlyUsage || []).forEach(function (row) { %><div class="col-6 col-md-3"><div class="border rounded p-2"><div class="small text-muted"><%= row.month %></div><strong><%= formatQty(row.units) %> units</strong><div class="small text-muted"><%= formatPKR(row.amountPaisa) %></div></div></div><% }) %></div></div></div>
+    <% if (survey.photos && survey.photos.length) { %><div class="card app-card"><div class="card-header bg-transparent"><h2 class="h6 mb-0">Photo gallery</h2></div><div class="card-body"><div class="survey-gallery"><% survey.photos.forEach(function (photo) { %><a href="<%= photo.path %>" target="_blank" rel="noopener" class="survey-photo"><img src="<%= photo.path %>" alt="<%= surveys.SURVEY_PHOTO_LABELS[photo.type] %>"><span><%= surveys.SURVEY_PHOTO_LABELS[photo.type] %></span></a><% }) %></div></div></div><% } %>
+  </div>
+  <div class="col-12 col-xl-4">
+    <div class="card app-card mb-3 border-success-subtle"><div class="card-body"><div class="small text-muted text-uppercase fw-semibold">Recommended system</div><div class="display-6 fw-bold text-success"><%= survey.recommendedKw ? formatQty(survey.recommendedKw) + ' kW' : '—' %></div><div class="fw-medium"><%= surveys.SYSTEM_TYPE_LABELS[survey.systemType] || 'System type not selected' %></div><p class="small text-muted mt-2 mb-0"><%= survey.recommendationBasis || 'Add monthly usage to calculate a suggestion.' %></p></div></div>
+    <div class="card app-card mb-3"><div class="card-header bg-transparent"><h2 class="h6 mb-0">Visit details</h2></div><div class="card-body"><dl class="row small mb-0"><dt class="col-5 text-muted fw-normal">Surveyor</dt><dd class="col-7"><%= survey.surveyor ? survey.surveyor.name : '—' %></dd><dt class="col-5 text-muted fw-normal">Scheduled</dt><dd class="col-7"><%= formatDateTime(survey.scheduledAt) %></dd><dt class="col-5 text-muted fw-normal">Completed</dt><dd class="col-7"><%= survey.completedAt ? formatDateTime(survey.completedAt) : '—' %></dd><dt class="col-5 text-muted fw-normal">Photos</dt><dd class="col-7"><%= survey.photos ? survey.photos.length : 0 %></dd></dl></div></div>
+    <% if (survey.remarks) { %><div class="card app-card"><div class="card-header bg-transparent"><h2 class="h6 mb-0">Remarks</h2></div><div class="card-body small" style="white-space:pre-wrap"><%= survey.remarks %></div></div><% } %>
+  </div>
+</div>

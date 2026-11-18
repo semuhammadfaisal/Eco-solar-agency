@@ -1,0 +1,211 @@
+<%
+  var headerActions = [];
+  if (canManage) {
+    headerActions.push({ label: 'Stock in', url: '/items/stock-in', icon: 'bi-box-arrow-in-down', class: 'btn-success' });
+    headerActions.push({ label: 'Supplier return', url: '/stock/returns', icon: 'bi-arrow-return-left', class: 'btn-outline-secondary' });
+  }
+  if (can('valuation.view')) {
+    headerActions.push({ label: 'Valuation report', url: '/stock/valuation', icon: 'bi-calculator', class: 'btn-primary' });
+  }
+
+  function movementUrl(movement) {
+    if (!movement.referenceId) return '';
+    if (movement.referenceType === 'purchase') return '/purchases/' + movement.referenceId;
+    if (movement.referenceType === 'serial') return '/serials/' + movement.referenceId;
+    return '';
+  }
+%>
+
+<%- include('../partials/page-header', {
+  heading: 'Stock ledger',
+  subheading: 'Every stock change, in order, with the document that caused it.',
+  actions: headerActions
+}) %>
+
+<div class="row g-3 mt-1">
+  <div class="col-6 col-lg-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-primary-subtle text-primary"><i class="bi bi-boxes"></i></span>
+      <div class="stat-value"><%= formatQty(summary.totalUnits) %></div>
+      <div class="stat-label">Units on hand</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-warning-subtle text-warning-emphasis"><i class="bi bi-exclamation-triangle"></i></span>
+      <div class="stat-value"><%= summary.lowStock %></div>
+      <div class="stat-label">Low-stock items</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-danger-subtle text-danger"><i class="bi bi-x-octagon"></i></span>
+      <div class="stat-value"><%= summary.outOfStock %></div>
+      <div class="stat-label">Out-of-stock items</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <% if (canViewCosts && summary.totalValuePaisa !== undefined) { %>
+        <span class="stat-icon bg-success-subtle text-success"><i class="bi bi-cash-stack"></i></span>
+        <div class="stat-value"><%= formatPKR(summary.totalValuePaisa) %></div>
+        <div class="stat-label">Stock value at average cost</div>
+      <% } else { %>
+        <span class="stat-icon bg-info-subtle text-info-emphasis"><i class="bi bi-arrow-down-square"></i></span>
+        <div class="stat-value"><%= formatQty(summary.unitsReceived) %></div>
+        <div class="stat-label">Units received (all time)</div>
+      <% } %>
+    </div></div>
+  </div>
+</div>
+
+<% if (selectedItem) { %>
+  <div class="card app-card mt-3 border-primary-subtle">
+    <div class="card-body d-flex flex-wrap gap-3 justify-content-between align-items-center">
+      <div>
+        <div class="fw-semibold"><%= selectedItem.name %></div>
+        <div class="text-muted small font-monospace"><%= selectedItem.sku %></div>
+      </div>
+      <div class="d-flex flex-wrap gap-3 small">
+        <div><span class="text-muted">On hand</span> <strong><%= formatQty(selectedItem.currentStock) %></strong></div>
+        <div><span class="text-muted">Minimum</span> <strong><%= formatQty(selectedItem.minStock) %></strong></div>
+        <% if (canViewCosts) { %>
+          <div><span class="text-muted">Average cost</span> <strong><%= formatPKR(selectedItem.avgCostPaisa) %></strong></div>
+        <% } %>
+        <a href="/items/<%= selectedItem._id %>" class="btn btn-sm btn-outline-secondary">Open item</a>
+        <a href="/stock" class="btn btn-sm btn-outline-secondary">Clear</a>
+      </div>
+    </div>
+  </div>
+<% } %>
+
+<div class="card app-card mt-3">
+  <div class="card-body border-bottom">
+    <form method="GET" action="/stock" class="row g-2 align-items-end">
+      <div class="col-12 col-md-3">
+        <label for="search" class="form-label small text-muted mb-1">Search</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="search" class="form-control" id="search" name="search"
+                 value="<%= filters.search %>" placeholder="Reference, item, location, notes">
+        </div>
+      </div>
+
+      <div class="col-6 col-md-3">
+        <label for="item" class="form-label small text-muted mb-1">Item</label>
+        <select class="form-select" id="item" name="item">
+          <option value="">All items</option>
+          <% items.forEach(function (item) { %>
+            <option value="<%= item._id %>"<%= String(filters.item) === String(item._id) ? ' selected' : '' %>>
+              <%= item.sku %> — <%= item.name %>
+            </option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div class="col-6 col-md-2">
+        <label for="type" class="form-label small text-muted mb-1">Type</label>
+        <select class="form-select" id="type" name="type">
+          <option value="">All movements</option>
+          <% inventory.STOCK_MOVEMENT_TYPES.forEach(function (type) { %>
+            <option value="<%= type %>"<%= filters.type === type ? ' selected' : '' %>>
+              <%= inventory.STOCK_MOVEMENT_LABELS[type] %>
+            </option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div class="col-6 col-md-1">
+        <label for="from" class="form-label small text-muted mb-1">From</label>
+        <input type="date" class="form-control" id="from" name="from" value="<%= filters.from %>">
+      </div>
+      <div class="col-6 col-md-1">
+        <label for="to" class="form-label small text-muted mb-1">To</label>
+        <input type="date" class="form-control" id="to" name="to" value="<%= filters.to %>">
+      </div>
+
+      <div class="col-12 col-md-2 d-flex gap-2">
+        <button type="submit" class="btn btn-primary flex-grow-1"><i class="bi bi-funnel me-1"></i>Filter</button>
+        <a href="/stock" class="btn btn-outline-secondary">Reset</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card-header bg-transparent d-flex flex-wrap gap-2 justify-content-between align-items-center">
+    <span class="small text-muted"><strong><%= total %></strong> movement<%= total === 1 ? '' : 's' %> found</span>
+    <span class="badge text-bg-light border"><i class="bi bi-journal-text me-1"></i>Append-only ledger</span>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-hover align-middle app-table mb-0">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Item</th>
+          <th>Type</th>
+          <th class="text-end">Qty</th>
+          <% if (canViewCosts) { %><th class="text-end">Unit cost</th><% } %>
+          <th class="text-end">Balance</th>
+          <th>Reference</th>
+          <th>Location</th>
+          <th>User</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (!movements.length) { %>
+          <tr>
+            <td colspan="<%= canViewCosts ? 9 : 8 %>" class="text-center py-5 text-muted">
+              <i class="bi bi-arrow-left-right fs-3 d-block mb-2"></i>
+              No stock movements match your filters.
+            </td>
+          </tr>
+        <% } else { %>
+          <% movements.forEach(function (movement) { 
+               var url = movementUrl(movement);
+          %>
+            <tr>
+              <td class="small text-muted">
+                <%= formatDate(movement.occurredAt) %>
+                <div style="font-size:.72rem"><%= formatDateTime(movement.occurredAt).split(', ')[1] || '' %></div>
+              </td>
+              <td>
+                <% if (movement.item) { %>
+                  <a href="/items/<%= movement.item._id %>" class="fw-semibold text-decoration-none"><%= movement.item.sku %></a>
+                  <div class="text-muted small"><%= movement.item.name %></div>
+                <% } else { %>
+                  <span class="text-muted">—</span>
+                <% } %>
+              </td>
+              <td>
+                <span class="badge text-bg-<%= inventory.STOCK_MOVEMENT_BADGES[movement.type] || 'secondary' %>">
+                  <%= inventory.STOCK_MOVEMENT_LABELS[movement.type] || movement.type %>
+                </span>
+              </td>
+              <td class="text-end fw-semibold <%= movement.qty > 0 ? 'text-success' : 'text-danger' %>">
+                <%= movement.qty > 0 ? '+' : '' %><%= formatQty(movement.qty) %>
+              </td>
+              <% if (canViewCosts) { %>
+                <td class="text-end small"><%= formatPKR(movement.unitCostPaisa) %></td>
+              <% } %>
+              <td class="text-end small"><%= formatQty(movement.balanceAfter) %></td>
+              <td class="small">
+                <% if (url) { %>
+                  <a href="<%= url %>" class="font-monospace text-decoration-none"><%= movement.reference || '—' %></a>
+                <% } else { %>
+                  <span class="font-monospace"><%= movement.reference || '—' %></span>
+                <% } %>
+                <div class="text-muted" style="font-size:.72rem">
+                  <%= movement.supplier ? movement.supplier.name : (movement.customer ? movement.customer.name : '') %>
+                </div>
+              </td>
+              <td class="small text-muted"><%= movement.location || '—' %></td>
+              <td class="small text-muted"><%= movement.createdBy ? movement.createdBy.name : 'System' %></td>
+            </tr>
+          <% }); %>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+
+  <%- include('../partials/pagination', { pagination: pagination }) %>
+</div>

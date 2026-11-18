@@ -1,0 +1,117 @@
+<%- include('../partials/page-header', {
+  heading: 'Attendance summary',
+  subheading: 'Monthly attendance counts, attendance rate and totals per employee.',
+  actions: [
+    { label: 'Daily attendance', url: '/employees/attendance', icon: 'bi-calendar-check', class: 'btn-primary' },
+    { label: 'Back to employees', url: '/employees', icon: 'bi-arrow-left', class: 'btn-outline-secondary' }
+  ]
+}) %>
+
+<div class="card app-card mt-3">
+  <div class="card-body border-bottom">
+    <form method="GET" action="/employees/attendance/summary" class="row g-2 align-items-end no-print">
+      <div class="col-12 col-sm-5 col-md-4">
+        <label for="month" class="form-label small text-muted mb-1">Month</label>
+        <input type="month" class="form-control" id="month" name="month"
+               value="<%= summary.monthKey %>" max="<%= currentMonth %>">
+      </div>
+      <div class="col-12 col-sm-7 col-md-6 d-flex gap-2">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-funnel me-1"></i>Show month</button>
+        <a href="/employees/attendance/summary" class="btn btn-outline-secondary">This month</a>
+        <button type="button" class="btn btn-outline-secondary ms-auto" onclick="window.print()">
+          <i class="bi bi-printer me-1"></i>Print
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card-header bg-transparent">
+    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+      <div class="small text-muted">
+        Summary for <strong><%= summary.monthKey %></strong>
+        · <strong><%= summary.rows.length %></strong> employee<%= summary.rows.length === 1 ? '' : 's' %>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <span class="badge text-bg-success-subtle text-success-emphasis border border-success-subtle">Present <%= summary.totals.present || 0 %></span>
+        <span class="badge text-bg-danger-subtle text-danger-emphasis border border-danger-subtle">Absent <%= summary.totals.absent || 0 %></span>
+        <span class="badge text-bg-warning-subtle text-warning-emphasis border border-warning-subtle">Late <%= summary.totals.late || 0 %></span>
+        <span class="badge text-bg-info-subtle text-info-emphasis border border-info-subtle">Leave <%= summary.totals.leave || 0 %></span>
+        <span class="badge text-bg-light border">Half day <%= summary.totals.half_day || 0 %></span>
+      </div>
+    </div>
+  </div>
+
+  <% if (!summary.rows.length) { %>
+    <div class="card-body text-center py-5 text-muted">
+      <i class="bi bi-bar-chart fs-2 d-block mb-2"></i>
+      <p class="mb-1">No active employees to summarise.</p>
+      <a href="/employees/new" class="small">Add an employee profile</a>
+    </div>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle app-table mb-0">
+        <thead>
+          <tr>
+            <th style="min-width:210px">Employee</th>
+            <th class="text-center">Present</th>
+            <th class="text-center">Absent</th>
+            <th class="text-center">Leave</th>
+            <th class="text-center">Half day</th>
+            <th class="text-center">Late</th>
+            <th class="text-center">Marked</th>
+            <th style="min-width:150px">Attendance rate</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% summary.rows.forEach(function (row) {
+               var employee = row.employee;
+               var name = employee.user ? employee.user.name : 'Unknown staff';
+               var rateClass = row.rate >= 90 ? 'bg-success' : row.rate >= 70 ? 'bg-warning' : 'bg-danger';
+          %>
+            <tr>
+              <td>
+                <div class="d-flex align-items-center gap-2">
+                  <span class="avatar avatar-sm"><%= initials(name) %></span>
+                  <div class="min-w-0">
+                    <div class="fw-semibold text-truncate"><%= name %></div>
+                    <div class="text-muted small text-truncate"><%= employee.designation %></div>
+                  </div>
+                </div>
+              </td>
+              <td class="text-center"><%= row.present %></td>
+              <td class="text-center"><%= row.absent %></td>
+              <td class="text-center"><%= row.leave %></td>
+              <td class="text-center"><%= row.half_day %></td>
+              <td class="text-center"><%= row.late %></td>
+              <td class="text-center"><%= row.marked %></td>
+              <td>
+                <div class="d-flex align-items-center gap-2">
+                  <div class="progress flex-grow-1" style="height:6px" role="progressbar"
+                       aria-label="Attendance rate for <%= name %>"
+                       aria-valuenow="<%= row.rate %>" aria-valuemin="0" aria-valuemax="100">
+                    <div class="progress-bar <%= rateClass %>" style="width:<%= row.rate %>%"></div>
+                  </div>
+                  <span class="small text-muted" style="min-width:38px"><%= row.rate %>%</span>
+                </div>
+              </td>
+            </tr>
+          <% }); %>
+        </tbody>
+        <tfoot class="table-light">
+          <tr class="fw-semibold">
+            <td>Monthly totals</td>
+            <td class="text-center"><%= summary.totals.present || 0 %></td>
+            <td class="text-center"><%= summary.totals.absent || 0 %></td>
+            <td class="text-center"><%= summary.totals.leave || 0 %></td>
+            <td class="text-center"><%= summary.totals.half_day || 0 %></td>
+            <td class="text-center"><%= summary.totals.late || 0 %></td>
+            <td class="text-center"><%= summary.totals.marked || 0 %></td>
+            <td class="text-muted small fw-normal">
+              Rate = (present + late + ½ half-day) ÷ marked days
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  <% } %>
+</div>

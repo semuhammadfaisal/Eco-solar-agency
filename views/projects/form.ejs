@@ -1,0 +1,426 @@
+<%
+  function oldArray(name) {
+    var value = oldInput[name];
+    if (value === undefined || value === null || value === '') return [];
+    return Array.isArray(value) ? value : [value];
+  }
+
+  var oldLabels = oldArray('milestoneLabel');
+  var oldPercents = oldArray('milestonePercent');
+  var oldDates = oldArray('milestoneDueDate');
+  var initialMilestones = [];
+  var milestoneRows = Math.max(oldLabels.length, oldPercents.length, oldDates.length);
+
+  if (milestoneRows) {
+    for (var i = 0; i < milestoneRows; i += 1) {
+      initialMilestones.push({
+        label: oldLabels[i] || '',
+        percent: oldPercents[i] || '',
+        dueDate: oldDates[i] || ''
+      });
+    }
+  } else {
+    initialMilestones = [
+      { label: 'Advance on Booking & Contract Signing', percent: 50, dueDate: '' },
+      { label: 'Upon Delivery of Equipment at Project Site', percent: 40, dueDate: '' },
+      { label: 'Upon Testing, Commissioning & Net-Metering', percent: 10, dueDate: '' }
+    ];
+  }
+
+  var milestoneJson = JSON.stringify(initialMilestones)
+    .replace(/&/g, '&amp;')
+    .replace(/'/g, '&#39;');
+%>
+
+<%- include('../partials/page-header', {
+  heading: 'Start a project',
+  subheading: 'Create a project directly for an existing or new customer. Quotations are optional.',
+  actions: [{ label: 'Back to projects', url: '/projects', icon: 'bi-arrow-left', class: 'btn-outline-secondary' }]
+}) %>
+
+<div class="row g-3 g-lg-4 mt-1">
+  <div class="col-12 col-xl-9">
+    <form method="POST" action="/projects" novalidate
+          x-data='projectForm(<%- milestoneJson %>, <%- JSON.stringify(old("customerMode", "existing")) %>, <%- JSON.stringify(old("paymentType", "cash")) %>, <%- JSON.stringify(old("amount", "")) %>)'>
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+      <%- include('../partials/form-errors') %>
+
+      <!-- Customer -->
+      <div class="card app-card mb-3">
+        <div class="card-header bg-transparent py-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
+          <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+            <i class="bi bi-person-badge"></i> Customer
+          </h3>
+          <div class="btn-group" role="group">
+            <input type="radio" class="btn-check" name="customerMode" id="modeExisting" value="existing" x-model="customerMode">
+            <label class="btn btn-outline-primary btn-sm" for="modeExisting">Existing customer</label>
+
+            <input type="radio" class="btn-check" name="customerMode" id="modeNew" value="new" x-model="customerMode">
+            <label class="btn btn-outline-primary btn-sm" for="modeNew">New customer</label>
+          </div>
+        </div>
+
+        <div class="card-body p-3 p-md-4">
+          <!-- Existing customer -->
+          <div x-show="customerMode === 'existing'" x-cloak>
+            <label for="customer" class="form-label">Select customer <span class="text-danger">*</span></label>
+            <select class="form-select" id="customer" name="customer" :required="customerMode === 'existing'">
+              <option value="">Choose a customer…</option>
+              <% customers.forEach(function (customer) { %>
+                <option value="<%= customer._id %>" <%= String(old('customer', '')) === String(customer._id) ? 'selected' : '' %>>
+                  <%= customer.name %><%= customer.code ? ' (' + customer.code + ')' : '' %><%= customer.phone ? ' · ' + customer.phone : '' %>
+                </option>
+              <% }); %>
+            </select>
+            <div class="form-text">Not listed yet? Switch to “New customer”.</div>
+          </div>
+
+          <!-- New customer -->
+          <div x-show="customerMode === 'new'" x-cloak>
+            <div class="row g-3">
+              <div class="col-12 col-md-6">
+                <label for="name" class="form-label">Customer name <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="name" name="name"
+                       value="<%= old('name', '') %>" maxlength="120" autocomplete="name"
+                       :required="customerMode === 'new'">
+              </div>
+              <div class="col-12 col-md-6">
+                <label for="phone" class="form-label">Phone <span class="text-danger">*</span></label>
+                <input type="tel" class="form-control" id="phone" name="phone"
+                       value="<%= old('phone', '') %>" maxlength="20" placeholder="03001234567"
+                       autocomplete="tel" :required="customerMode === 'new'">
+              </div>
+              <div class="col-12 col-md-6">
+                <label for="whatsapp" class="form-label">WhatsApp</label>
+                <input type="tel" class="form-control" id="whatsapp" name="whatsapp"
+                       value="<%= old('whatsapp', '') %>" maxlength="20" placeholder="03001234567">
+              </div>
+              <div class="col-12 col-md-6">
+                <label for="cnic" class="form-label">CNIC</label>
+                <input type="text" class="form-control" id="cnic" name="cnic"
+                       value="<%= old('cnic', '') %>" maxlength="15" placeholder="12345-1234567-1" inputmode="numeric">
+              </div>
+              <div class="col-12">
+                <label for="address" class="form-label">Address</label>
+                <textarea class="form-control" id="address" name="address" rows="2"
+                          maxlength="250" placeholder="House / street / block"><%= old('address', '') %></textarea>
+              </div>
+              <div class="col-12 col-md-4">
+                <label for="city" class="form-label">City</label>
+                <input type="text" class="form-control" id="city" name="city"
+                       value="<%= old('city', '') %>" maxlength="80">
+              </div>
+              <div class="col-12 col-md-4">
+                <label for="area" class="form-label">Area / locality</label>
+                <input type="text" class="form-control" id="area" name="area"
+                       value="<%= old('area', '') %>" maxlength="80">
+              </div>
+              <div class="col-12 col-md-4">
+                <label for="customerType" class="form-label">Customer type</label>
+                <select class="form-select" id="customerType" name="customerType">
+                  <% crm.CUSTOMER_TYPES.forEach(function (type) { %>
+                    <option value="<%= type %>" <%= old('customerType', 'residential') === type ? 'selected' : '' %>>
+                      <%= crm.CUSTOMER_TYPE_LABELS[type] %>
+                    </option>
+                  <% }); %>
+                </select>
+              </div>
+              <div class="col-12 col-md-4">
+                <label for="customerSource" class="form-label">Lead source</label>
+                <select class="form-select" id="customerSource" name="customerSource">
+                  <% crm.CUSTOMER_SOURCES.forEach(function (source) { %>
+                    <option value="<%= source %>" <%= old('customerSource', 'walk_in') === source ? 'selected' : '' %>>
+                      <%= crm.CUSTOMER_SOURCE_LABELS[source] %>
+                    </option>
+                  <% }); %>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Project details -->
+      <div class="card app-card mb-3">
+        <div class="card-header bg-transparent py-3">
+          <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+            <i class="bi bi-sun"></i> Project details
+          </h3>
+        </div>
+        <div class="card-body p-3 p-md-4">
+          <div class="row g-3">
+            <div class="col-12 col-md-8">
+              <label for="projectTitle" class="form-label">Project title</label>
+              <input type="text" class="form-control" id="projectTitle" name="projectTitle"
+                     value="<%= old('projectTitle', '') %>" maxlength="120"
+                     placeholder="e.g. 10 kW Hybrid — DHA Phase 5 Residence">
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label for="startDate" class="form-label">Start date</label>
+              <input type="date" class="form-control" id="startDate" name="startDate"
+                     value="<%= old('startDate', new Date().toISOString().slice(0, 10)) %>">
+            </div>
+
+            <div class="col-6 col-md-3">
+              <label for="capacityKw" class="form-label">Capacity (kW) <span class="text-danger">*</span></label>
+              <input type="number" step="0.01" min="0.01" class="form-control" id="capacityKw" name="capacityKw"
+                     value="<%= old('capacityKw', '') %>" required placeholder="10">
+            </div>
+
+            <div class="col-6 col-md-3">
+              <label for="systemType" class="form-label">System type <span class="text-danger">*</span></label>
+              <select class="form-select" id="systemType" name="systemType" required>
+                <% systems.SYSTEM_TYPES.forEach(function (type) { %>
+                  <option value="<%= type %>" <%= old('systemType', 'on_grid') === type ? 'selected' : '' %>>
+                    <%= systems.SYSTEM_TYPE_LABELS[type] %>
+                  </option>
+                <% }); %>
+              </select>
+            </div>
+
+            <div class="col-6 col-md-2">
+              <label for="panelCount" class="form-label">Panels</label>
+              <input type="number" min="0" step="1" class="form-control" id="panelCount" name="panelCount"
+                     value="<%= old('panelCount', '') %>" placeholder="18">
+            </div>
+
+            <div class="col-6 col-md-2">
+              <label for="inverterCapacityKw" class="form-label">Inverter kW</label>
+              <input type="number" min="0" step="0.01" class="form-control" id="inverterCapacityKw" name="inverterCapacityKw"
+                     value="<%= old('inverterCapacityKw', '') %>" placeholder="10">
+            </div>
+
+            <div class="col-6 col-md-2">
+              <label for="batteryCapacityKwh" class="form-label">Battery kWh</label>
+              <input type="number" min="0" step="0.01" class="form-control" id="batteryCapacityKwh" name="batteryCapacityKwh"
+                     value="<%= old('batteryCapacityKwh', '') %>" placeholder="0">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Commercials -->
+      <div class="card app-card mb-3">
+        <div class="card-header bg-transparent py-3">
+          <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+            <i class="bi bi-cash-stack"></i> Contract &amp; payment
+          </h3>
+        </div>
+        <div class="card-body p-3 p-md-4">
+          <div class="row g-3">
+            <div class="col-12 col-md-4">
+              <label for="amount" class="form-label">Contract amount (PKR) <span class="text-danger">*</span></label>
+              <input type="text" inputmode="decimal" class="form-control" id="amount" name="amount"
+                     x-model="amount" value="<%= old('amount', '') %>" required placeholder="1,500,000">
+            </div>
+
+            <% if (canViewCosts) { %>
+              <div class="col-12 col-md-4">
+                <label for="estimatedCost" class="form-label">Estimated project cost (PKR)</label>
+                <input type="text" inputmode="decimal" class="form-control" id="estimatedCost" name="estimatedCost"
+                       value="<%= old('estimatedCost', '') %>" placeholder="Optional">
+                <div class="form-text">Used to estimate profit. Hidden from roles without cost access.</div>
+              </div>
+            <% } %>
+
+            <div class="col-12 col-md-4">
+              <label class="form-label d-block">Payment type <span class="text-danger">*</span></label>
+              <div class="btn-group w-100" role="group">
+                <% quotations.PAYMENT_OPTIONS.forEach(function (option) { %>
+                  <input type="radio" class="btn-check" name="paymentType" id="payment-<%= option %>"
+                         value="<%= option %>" x-model="paymentType">
+                  <label class="btn btn-outline-primary" for="payment-<%= option %>">
+                    <%= option === 'cash' ? 'Cash / Advance' : 'Installments' %>
+                  </label>
+                <% }); %>
+              </div>
+            </div>
+
+            <% if (!isSalesUser) { %>
+              <div class="col-12 col-md-6">
+                <label for="assignedTo" class="form-label">Assigned salesperson</label>
+                <select class="form-select" id="assignedTo" name="assignedTo">
+                  <option value="">Assign to me</option>
+                  <% officers.forEach(function (officer) { %>
+                    <option value="<%= officer._id %>" <%= String(old('assignedTo', '')) === String(officer._id) ? 'selected' : '' %>>
+                      <%= officer.name %>
+                    </option>
+                  <% }); %>
+                </select>
+              </div>
+            <% } else { %>
+              <div class="col-12 col-md-6">
+                <label class="form-label">Assigned salesperson</label>
+                <input type="text" class="form-control" value="<%= currentUser.name %> (you)" disabled>
+              </div>
+            <% } %>
+
+            <div class="col-12">
+              <label for="notes" class="form-label">Notes</label>
+              <textarea class="form-control" id="notes" name="notes" rows="3" maxlength="3000"
+                        placeholder="Site details, scope, special terms…"><%= old('notes', '') %></textarea>
+            </div>
+          </div>
+
+          <hr class="my-4">
+
+          <!-- Milestones -->
+          <div x-show="paymentType === 'installment'" x-cloak>
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+              <div class="small fw-semibold">
+                Milestone schedule
+                <span class="badge ms-2" :class="totalPercent > 100 ? 'text-bg-danger' : 'text-bg-success'"
+                      x-text="'Total: ' + totalPercent + '%'"></span>
+              </div>
+              <div class="d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" @click="resetMilestones()">
+                  <i class="bi bi-arrow-clockwise me-1"></i>Standard (50 / 40 / 10)
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-primary" @click="addMilestone()">
+                  <i class="bi bi-plus-lg me-1"></i>Add milestone
+                </button>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="table table-sm align-middle table-bordered mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Milestone stage / description</th>
+                    <th style="width: 110px;">Percent (%)</th>
+                    <th style="width: 150px;" class="text-end">Amount (PKR)</th>
+                    <th style="width: 160px;">Due date</th>
+                    <th style="width: 40px;"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="(milestone, index) in milestones" :key="index">
+                    <tr>
+                      <td>
+                        <input type="text" class="form-control form-control-sm" name="milestoneLabel"
+                               x-model="milestone.label" maxlength="120" placeholder="e.g. Booking advance">
+                      </td>
+                      <td>
+                        <div class="input-group input-group-sm">
+                          <input type="number" class="form-control" name="milestonePercent" min="0" max="100" step="any"
+                                 x-model.number="milestone.percent">
+                          <span class="input-group-text">%</span>
+                        </div>
+                      </td>
+                      <td class="text-end fw-semibold font-monospace" x-text="milestoneAmount(milestone.percent)"></td>
+                      <td>
+                        <input type="date" class="form-control form-control-sm" name="milestoneDueDate"
+                               x-model="milestone.dueDate">
+                      </td>
+                      <td class="text-center">
+                        <button type="button" class="btn btn-sm btn-link text-danger p-0" @click="removeMilestone(index)">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="form-text" :class="totalPercent > 100 ? 'text-danger' : ''">
+              Percentages may total up to 100%. Leave the schedule empty to use the standard 50 / 40 / 10 plan.
+            </div>
+          </div>
+
+          <div x-show="paymentType === 'cash'" x-cloak class="alert alert-light border d-flex align-items-center gap-2 mb-0">
+            <i class="bi bi-info-circle text-primary fs-5"></i>
+            <div>
+              <strong>Cash contract:</strong> a single 100% advance milestone is created automatically
+              (<span class="fw-bold" x-text="milestoneAmount(100)"></span>).
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex flex-wrap gap-2 mb-4">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check2-circle me-1"></i>Start project
+        </button>
+        <a href="/projects" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="col-12 col-xl-3">
+    <div class="card app-card mb-3">
+      <div class="card-header bg-transparent py-3">
+        <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+          <i class="bi bi-lightbulb"></i> What happens next
+        </h3>
+      </div>
+      <div class="card-body small text-muted">
+        <ul class="mb-0 ps-3">
+          <li class="mb-2">A project and invoice number are generated automatically.</li>
+          <li class="mb-2">The contract receivable and revenue are posted to accounting.</li>
+          <li class="mb-2">The milestone schedule drives the installment plan.</li>
+          <li class="mb-0">You can update the project stage from its detail page.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card app-card">
+      <div class="card-header bg-transparent py-3">
+        <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+          <i class="bi bi-file-earmark-text"></i> Prefer a quotation?
+        </h3>
+      </div>
+      <div class="card-body small text-muted">
+        <p class="mb-2">Use the formal quotation flow when the customer needs a proposal or approval before work starts.</p>
+        <a href="/quotations/new" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-plus-lg me-1"></i>Create quotation
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  [x-cloak] { display: none !important; }
+</style>
+
+<script>
+  function projectForm(initialMilestones, initialCustomerMode, initialPaymentType, initialAmount) {
+    return {
+      customerMode: initialCustomerMode || 'existing',
+      paymentType: initialPaymentType || 'cash',
+      amount: initialAmount || '',
+      milestones: Array.isArray(initialMilestones) ? initialMilestones : [],
+
+      get totalPercent() {
+        return this.milestones.reduce(function (sum, milestone) {
+          return sum + (Number(milestone.percent) || 0);
+        }, 0);
+      },
+
+      milestoneAmount(percent) {
+        var amount = Number(String(this.amount).replace(/[^0-9.-]/g, '')) || 0;
+        var value = Math.round((amount * (Number(percent) || 0)) / 100);
+        return 'PKR ' + value.toLocaleString('en-PK', { maximumFractionDigits: 0 });
+      },
+
+      addMilestone() {
+        this.milestones.push({ label: '', percent: 0, dueDate: '' });
+      },
+
+      removeMilestone(index) {
+        this.milestones.splice(index, 1);
+      },
+
+      resetMilestones() {
+        this.milestones = [
+          { label: 'Advance on Booking & Contract Signing', percent: 50, dueDate: '' },
+          { label: 'Upon Delivery of Equipment at Project Site', percent: 40, dueDate: '' },
+          { label: 'Upon Testing, Commissioning & Net-Metering', percent: 10, dueDate: '' }
+        ];
+      }
+    };
+  }
+</script>

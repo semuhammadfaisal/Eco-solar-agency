@@ -1,0 +1,228 @@
+<%- include('../partials/page-header', {
+  heading: 'Recovery Escalations & Defaults',
+  subheading: 'High-risk default monitoring: accounts overdue 15+ days, broken promises to pay, and bounced security cheques.',
+  actions: [
+    { label: "Today's queue", url: '/recovery/today', icon: 'bi-phone-flip', class: 'btn-outline-primary' }
+  ]
+}) %>
+
+<!-- Summary Statistics -->
+<div class="row g-2 mb-4">
+  <div class="col-12 col-md-4">
+    <div class="card app-card text-center p-3 border-danger-subtle bg-danger-subtle h-100">
+      <div class="small text-danger text-uppercase fw-bold">Severe Overdue (15+ Days)</div>
+      <div class="display-6 fw-bold text-danger"><%= severeDelinquents.length %></div>
+      <div class="small text-danger">Accounts flagged for recovery/legal action</div>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="card app-card text-center p-3 border-warning-subtle h-100">
+      <div class="small text-warning-emphasis text-uppercase fw-bold">Broken Promises to Pay</div>
+      <div class="display-6 fw-bold text-warning-emphasis"><%= brokenPtps.length %></div>
+      <div class="small text-muted">Customer commitments breached</div>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="card app-card text-center p-3 border-dark-subtle h-100">
+      <div class="small text-muted text-uppercase fw-bold">Bounced / Dishonored Cheques</div>
+      <div class="display-6 fw-bold text-dark"><%= bouncedCheques.length %></div>
+      <div class="small text-muted">Banking clearance failures</div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabs for Escalation Categories -->
+<ul class="nav nav-pills mb-3" id="escalationTabs" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" id="severe-tab" data-bs-toggle="pill" data-bs-target="#severe" type="button" role="tab">
+      <i class="bi bi-exclamation-triangle-fill text-danger me-1"></i>Severe Delinquents (<%= severeDelinquents.length %>)
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="ptp-tab" data-bs-toggle="pill" data-bs-target="#ptp" type="button" role="tab">
+      <i class="bi bi-handshake-fill text-warning me-1"></i>Broken Promises (<%= brokenPtps.length %>)
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="cheques-tab" data-bs-toggle="pill" data-bs-target="#cheques" type="button" role="tab">
+      <i class="bi bi-slash-circle-fill text-dark me-1"></i>Bounced Cheques (<%= bouncedCheques.length %>)
+    </button>
+  </li>
+</ul>
+
+<div class="tab-content" id="escalationTabContent">
+
+  <!-- Tab 1: Severe Delinquents -->
+  <div class="tab-pane fade show active" id="severe" role="tabpanel">
+    <div class="card app-card">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light text-muted small text-uppercase">
+            <tr>
+              <th>Customer</th>
+              <th>Plan #</th>
+              <th>Assigned Officer</th>
+              <th>Max Days Overdue</th>
+              <th>Overdue Amount</th>
+              <th>Remaining Balance</th>
+              <th>Status</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!severeDelinquents.length) { %>
+              <tr>
+                <td colspan="8" class="text-center py-4 text-muted">No accounts currently in severe delinquency.</td>
+              </tr>
+            <% } else { %>
+              <% severeDelinquents.forEach(function (r) { %>
+                <tr>
+                  <td>
+                    <div class="fw-semibold">
+                      <a href="/customers/<%= r.customer._id %>" class="text-dark text-decoration-none">
+                        <%= r.customer.name %>
+                      </a>
+                    </div>
+                    <div class="small text-muted"><%= r.customer.phone %> &bull; <%= r.customer.city || 'N/A' %></div>
+                  </td>
+                  <td>
+                    <a href="/installments/<%= r.planId %>" class="fw-semibold text-decoration-none">
+                      <%= r.planNumber %>
+                    </a>
+                  </td>
+                  <td><span class="small"><%= r.assignedOfficer ? r.assignedOfficer.name : 'Unassigned' %></span></td>
+                  <td><span class="badge text-bg-danger fs-6"><%= r.maxDaysOverdue %> Days</span></td>
+                  <td class="text-danger fw-bold"><%= formatPKR(r.planOverduePaisa) %></td>
+                  <td class="text-muted"><%= formatPKR(r.remainingBalancePaisa) %></td>
+                  <td>
+                    <% if (r.isFlaggedForRecovery) { %>
+                      <span class="badge text-bg-danger">FLAGGED FOR RECOVERY</span>
+                    <% } else { %>
+                      <span class="badge text-bg-warning">15+ DAYS OVERDUE</span>
+                    <% } %>
+                  </td>
+                  <td class="text-end">
+                    <a href="/installments/<%= r.planId %>" class="btn btn-sm btn-outline-primary">
+                      Manage Plan
+                    </a>
+                  </td>
+                </tr>
+              <% }); %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab 2: Broken Promises to Pay -->
+  <div class="tab-pane fade" id="ptp" role="tabpanel">
+    <div class="card app-card">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light text-muted small text-uppercase">
+            <tr>
+              <th>Customer</th>
+              <th>Plan Number</th>
+              <th>Promised Amount</th>
+              <th>Promised Date</th>
+              <th>Broken Date</th>
+              <th>Recorded By</th>
+              <th>Notes</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!brokenPtps.length) { %>
+              <tr>
+                <td colspan="8" class="text-center py-4 text-muted">No broken promises on record.</td>
+              </tr>
+            <% } else { %>
+              <% brokenPtps.forEach(function (p) { %>
+                <tr>
+                  <td>
+                    <div class="fw-semibold">
+                      <%= p.customer ? p.customer.name : 'Unknown' %>
+                    </div>
+                    <div class="small text-muted"><%= p.customer ? p.customer.phone : '' %></div>
+                  </td>
+                  <td>
+                    <% if (p.installmentPlan) { %>
+                      <a href="/installments/<%= p.installmentPlan._id %>" class="text-decoration-none fw-semibold">
+                        <%= p.installmentPlan.planNumber %>
+                      </a>
+                    <% } else { %>
+                      <span class="text-muted">N/A</span>
+                    <% } %>
+                  </td>
+                  <td class="text-danger fw-bold"><%= formatPKR(p.promisedAmountPaisa) %></td>
+                  <td><%= formatDate(p.promisedDate) %></td>
+                  <td class="small text-muted"><%= formatDate(p.brokenAt) %></td>
+                  <td><span class="small"><%= p.recordedBy ? p.recordedBy.name : 'Officer' %></span></td>
+                  <td><span class="small text-muted"><%= p.notes || '—' %></span></td>
+                  <td class="text-end">
+                    <% if (p.installmentPlan) { %>
+                      <a href="/installments/<%= p.installmentPlan._id %>" class="btn btn-sm btn-outline-primary">
+                        Review Plan
+                      </a>
+                    <% } %>
+                  </td>
+                </tr>
+              <% }); %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab 3: Bounced Cheques -->
+  <div class="tab-pane fade" id="cheques" role="tabpanel">
+    <div class="card app-card">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light text-muted small text-uppercase">
+            <tr>
+              <th>Cheque #</th>
+              <th>Bank & Branch</th>
+              <th>Customer</th>
+              <th>Amount (PKR)</th>
+              <th>Cheque Date</th>
+              <th>Bounced Reason / Notes</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!bouncedCheques.length) { %>
+              <tr>
+                <td colspan="7" class="text-center py-4 text-muted">No bounced cheques recorded.</td>
+              </tr>
+            <% } else { %>
+              <% bouncedCheques.forEach(function (c) { %>
+                <tr>
+                  <td><strong class="text-danger"><%= c.chequeNumber %></strong></td>
+                  <td><%= c.bankName %> <%= c.branch ? '(' + c.branch + ')' : '' %></td>
+                  <td>
+                    <div class="fw-semibold"><%= c.customer ? c.customer.name : 'Unknown' %></div>
+                    <div class="small text-muted"><%= c.customer ? c.customer.phone : '' %></div>
+                  </td>
+                  <td class="fw-bold"><%= formatPKR(c.amountPaisa) %></td>
+                  <td><%= formatDate(c.chequeDate) %></td>
+                  <td class="small text-danger"><%= c.bouncedReason || c.notes || 'Dishonored by bank' %></td>
+                  <td class="text-end">
+                    <% if (c.installmentPlan) { %>
+                      <a href="/installments/<%= c.installmentPlan %>" class="btn btn-sm btn-outline-primary">
+                        View Plan
+                      </a>
+                    <% } %>
+                  </td>
+                </tr>
+              <% }); %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>

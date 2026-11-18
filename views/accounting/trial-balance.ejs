@@ -1,0 +1,97 @@
+<%- include('../partials/page-header', {
+  heading: 'Trial Balance Verification',
+  subheading: 'Fundamental double-entry accounting proof demonstrating that total debits equal total credits across all general ledger accounts.',
+  actions: [
+    { label: 'Download PDF', url: `/accounting/trial-balance?asOfDate=${asOfDateString}&format=pdf`, icon: 'bi-file-earmark-pdf', class: 'btn-outline-danger' },
+    { label: 'Export CSV', url: `/accounting/trial-balance?asOfDate=${asOfDateString}&format=csv`, icon: 'bi-file-earmark-spreadsheet', class: 'btn-outline-success' },
+    { label: 'Profit & Loss', url: '/accounting/profit-loss', icon: 'bi-graph-up', class: 'btn-outline-secondary' }
+  ]
+}) %>
+
+<!-- As of Date Selector -->
+<div class="card app-card mb-4 shadow-sm">
+  <div class="card-body p-3">
+    <form method="GET" action="/accounting/trial-balance" class="row g-2 align-items-end">
+      <div class="col-12 col-md-8">
+        <label class="form-label small fw-semibold">As of Date (Cut-off)</label>
+        <input type="date" name="asOfDate" value="<%= asOfDateString %>" class="form-control form-control-sm" onchange="this.form.submit()">
+      </div>
+      <div class="col-12 col-md-4 d-flex gap-2">
+        <button type="submit" class="btn btn-sm btn-dark w-100"><i class="bi bi-calendar-check me-1"></i>Calculate Trial Balance</button>
+        <a href="/accounting/trial-balance" class="btn btn-sm btn-outline-secondary">Today</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Ledger Balancing Invariant Banner -->
+<% if (trialBalance.isBalanced) { %>
+  <div class="alert alert-success d-flex align-items-center mb-4 shadow-sm" role="alert">
+    <i class="bi bi-check-circle-fill fs-3 me-3 text-success"></i>
+    <div>
+      <h3 class="h6 alert-heading fw-bold mb-1">Double-Entry Ledger is Perfectly Balanced</h3>
+      <p class="mb-0 small text-success-emphasis">
+        Total Debits (<%= formatPKR(trialBalance.totalDebitPaisa) %>) exactly equal Total Credits (<%= formatPKR(trialBalance.totalCreditPaisa) %>)
+        down to the exact paisa.
+      </p>
+    </div>
+  </div>
+<% } else { %>
+  <div class="alert alert-danger d-flex align-items-center mb-4 shadow-sm" role="alert">
+    <i class="bi bi-exclamation-triangle-fill fs-3 me-3 text-danger"></i>
+    <div>
+      <h3 class="h6 alert-heading fw-bold mb-1">Discrepancy Detected in General Ledger</h3>
+      <p class="mb-0 small text-danger-emphasis">
+        Total Debits (<%= formatPKR(trialBalance.totalDebitPaisa) %>) do not match Total Credits (<%= formatPKR(trialBalance.totalCreditPaisa) %>).
+        Variance: <%= formatPKR(Math.abs(trialBalance.differencePaisa)) %>.
+      </p>
+    </div>
+  </div>
+<% } %>
+
+<!-- Trial Balance Table -->
+<div class="card app-card shadow-sm mb-4">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0 app-table">
+      <thead class="table-light">
+        <tr>
+          <th>Code</th>
+          <th>Account Name</th>
+          <th>Category / Type</th>
+          <th>Normal</th>
+          <th class="text-end">Debit Balance (PKR)</th>
+          <th class="text-end">Credit Balance (PKR)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% trialBalance.rows.forEach(function(r) { %>
+          <tr>
+            <td class="font-monospace fw-bold text-dark"><%= r.code %></td>
+            <td class="fw-semibold text-dark"><%= r.name %></td>
+            <td>
+              <span class="badge text-bg-light border text-uppercase small"><%= r.type %></span>
+            </td>
+            <td>
+              <span class="badge <%= r.normalBalance === 'debit' ? 'text-bg-primary-subtle text-primary' : 'text-bg-warning-subtle text-warning-emphasis' %> small">
+                <%= r.normalBalance %>
+              </span>
+            </td>
+            <td class="text-end font-monospace <%= r.debitBalancePaisa > 0 ? 'text-dark fw-bold' : 'text-muted' %>">
+              <%= r.debitBalancePaisa ? formatPKR(r.debitBalancePaisa) : '—' %>
+            </td>
+            <td class="text-end font-monospace <%= r.creditBalancePaisa > 0 ? 'text-dark fw-bold' : 'text-muted' %>">
+              <%= r.creditBalancePaisa ? formatPKR(r.creditBalancePaisa) : '—' %>
+            </td>
+          </tr>
+        <% }); %>
+      </tbody>
+      <tfoot class="table-dark font-monospace fs-6">
+        <tr>
+          <td colspan="4" class="fw-bold">TOTAL TRIAL BALANCE</td>
+          <td class="text-end fw-bold"><%= formatPKR(trialBalance.totalDebitPaisa) %></td>
+          <td class="text-end fw-bold"><%= formatPKR(trialBalance.totalCreditPaisa) %></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>

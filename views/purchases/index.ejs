@@ -1,0 +1,194 @@
+<%
+  var headerActions = [];
+  if (can('purchases.manage')) {
+    headerActions.push({ label: 'New purchase order', url: '/purchases/new', icon: 'bi-plus-lg', class: 'btn-primary' });
+  }
+%>
+
+<%- include('../partials/page-header', {
+  heading: 'Purchase orders',
+  subheading: 'Raise a PO, receive it against a GRN and keep supplier payables current.',
+  actions: headerActions
+}) %>
+
+<div class="row g-3 mt-1">
+  <div class="col-6 col-lg-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-primary-subtle text-primary"><i class="bi bi-receipt"></i></span>
+      <div class="stat-value"><%= stats.total %></div>
+      <div class="stat-label">Purchase orders</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-info-subtle text-info-emphasis"><i class="bi bi-hourglass-split"></i></span>
+      <div class="stat-value"><%= stats.ordered + stats.partial %></div>
+      <div class="stat-label">Open orders</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-success-subtle text-success"><i class="bi bi-check2-circle"></i></span>
+      <div class="stat-value"><%= stats.received %></div>
+      <div class="stat-label">Fully received</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-danger-subtle text-danger"><i class="bi bi-wallet2"></i></span>
+      <div class="stat-value"><%= formatPKR(stats.payablePaisa) %></div>
+      <div class="stat-label">Outstanding on POs</div>
+    </div></div>
+  </div>
+</div>
+
+<div class="card app-card mt-3">
+  <div class="card-body border-bottom">
+    <form method="GET" action="/purchases" class="row g-2 align-items-end">
+      <div class="col-12 col-md-3">
+        <label for="search" class="form-label small text-muted mb-1">Search</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="search" class="form-control" id="search" name="search"
+                 value="<%= filters.search %>" placeholder="PO, invoice, supplier, notes">
+        </div>
+      </div>
+
+      <div class="col-6 col-md-2">
+        <label for="status" class="form-label small text-muted mb-1">Status</label>
+        <select class="form-select" id="status" name="status">
+          <option value="">All statuses</option>
+          <% inventory.PURCHASE_STATUSES.forEach(function (status) { %>
+            <option value="<%= status %>"<%= filters.status === status ? ' selected' : '' %>>
+              <%= inventory.PURCHASE_STATUS_LABELS[status] %>
+            </option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div class="col-6 col-md-2">
+        <label for="paymentStatus" class="form-label small text-muted mb-1">Payment</label>
+        <select class="form-select" id="paymentStatus" name="paymentStatus">
+          <option value="">Any payment</option>
+          <% inventory.PAYMENT_STATUSES.forEach(function (status) { %>
+            <option value="<%= status %>"<%= filters.paymentStatus === status ? ' selected' : '' %>>
+              <%= inventory.PAYMENT_STATUS_LABELS[status] %>
+            </option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div class="col-6 col-md-2">
+        <label for="supplier" class="form-label small text-muted mb-1">Supplier</label>
+        <select class="form-select" id="supplier" name="supplier">
+          <option value="">All suppliers</option>
+          <% suppliers.forEach(function (supplier) { %>
+            <option value="<%= supplier._id %>"<%= String(filters.supplier) === String(supplier._id) ? ' selected' : '' %>>
+              <%= supplier.name %>
+            </option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div class="col-6 col-md-1">
+        <label for="from" class="form-label small text-muted mb-1">From</label>
+        <input type="date" class="form-control" id="from" name="from" value="<%= filters.from %>">
+      </div>
+      <div class="col-6 col-md-1">
+        <label for="to" class="form-label small text-muted mb-1">To</label>
+        <input type="date" class="form-control" id="to" name="to" value="<%= filters.to %>">
+      </div>
+
+      <div class="col-12 col-md-1 d-flex gap-2">
+        <button type="submit" class="btn btn-primary flex-grow-1" title="Filter"><i class="bi bi-funnel"></i></button>
+        <a href="/purchases" class="btn btn-outline-secondary" title="Reset"><i class="bi bi-arrow-counterclockwise"></i></a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card-header bg-transparent d-flex flex-wrap gap-2 justify-content-between align-items-center">
+    <span class="small text-muted"><strong><%= total %></strong> purchase order<%= total === 1 ? '' : 's' %> found</span>
+    <div class="d-flex flex-wrap gap-2">
+      <span class="badge text-bg-light border">PO → GRN → stock ledger</span>
+      <% if (filters.search || filters.status || filters.paymentStatus || filters.supplier || filters.from || filters.to) { %>
+        <span class="badge text-bg-light border">Filtered</span>
+      <% } %>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-hover align-middle app-table mb-0">
+      <thead>
+        <tr>
+          <th>Purchase order</th>
+          <th>Supplier</th>
+          <th>Date</th>
+          <th>Status</th>
+          <th>Payment</th>
+          <th class="text-end">Total</th>
+          <th class="text-end">Outstanding</th>
+          <th class="text-end" style="width:100px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (!purchases.length) { %>
+          <tr>
+            <td colspan="8" class="text-center py-5 text-muted">
+              <i class="bi bi-receipt fs-3 d-block mb-2"></i>
+              No purchase orders match your filters.
+            </td>
+          </tr>
+        <% } else { %>
+          <% purchases.forEach(function (purchase) { %>
+            <tr>
+              <td>
+                <a href="/purchases/<%= purchase._id %>" class="fw-semibold text-decoration-none font-monospace"><%= purchase.number %></a>
+                <div class="text-muted small">
+                  <% if (purchase.invoiceNo) { %>Inv. <%= purchase.invoiceNo %><% } else { %>No invoice yet<% } %>
+                  <% if (purchase.isFullyReceived) { %>
+                    <span class="badge text-bg-success-subtle text-success-emphasis ms-1">All received</span>
+                  <% } else if (purchase.orderedUnits) { %>
+                    <span class="ms-1"><%= formatQty(purchase.receivedUnits) %> / <%= formatQty(purchase.orderedUnits) %> received</span>
+                  <% } %>
+                </div>
+              </td>
+              <td class="small">
+                <% if (purchase.supplier) { %>
+                  <a href="/suppliers/<%= purchase.supplier._id %>" class="text-decoration-none"><%= purchase.supplier.name %></a>
+                  <div class="text-muted font-monospace"><%= purchase.supplier.code %></div>
+                <% } else { %>
+                  <span class="text-muted">—</span>
+                <% } %>
+              </td>
+              <td class="small text-muted"><%= formatDate(purchase.purchaseDate) %></td>
+              <td>
+                <span class="badge text-bg-<%= inventory.PURCHASE_STATUS_BADGES[purchase.status] || 'secondary' %>">
+                  <%= inventory.PURCHASE_STATUS_LABELS[purchase.status] || purchase.status %>
+                </span>
+              </td>
+              <td>
+                <span class="badge text-bg-<%= inventory.PAYMENT_STATUS_BADGES[purchase.paymentStatus] || 'secondary' %>">
+                  <%= inventory.PAYMENT_STATUS_LABELS[purchase.paymentStatus] || purchase.paymentStatus %>
+                </span>
+              </td>
+              <td class="text-end small fw-semibold"><%= formatPKR(purchase.totalPaisa) %></td>
+              <td class="text-end small <%= purchase.outstandingPaisa > 0 ? 'text-danger fw-semibold' : 'text-success' %>">
+                <%= formatPKR(purchase.outstandingPaisa) %>
+              </td>
+              <td class="text-end">
+                <div class="d-flex justify-content-end gap-1">
+                  <a class="btn btn-sm btn-outline-secondary" href="/purchases/<%= purchase._id %>" title="Open purchase"><i class="bi bi-eye"></i></a>
+                  <% if (can('purchases.manage') && purchase.status !== 'received' && purchase.status !== 'cancelled') { %>
+                    <a class="btn btn-sm btn-outline-secondary" href="/purchases/<%= purchase._id %>/receive" title="Receive stock"><i class="bi bi-box-arrow-in-down"></i></a>
+                  <% } %>
+                </div>
+              </td>
+            </tr>
+          <% }); %>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+
+  <%- include('../partials/pagination', { pagination: pagination }) %>
+</div>

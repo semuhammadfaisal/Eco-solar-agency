@@ -1,0 +1,69 @@
+<%
+  var customerId = old('customer', survey && survey.customer ? survey.customer._id : '');
+  var surveyorId = old('surveyor', survey && survey.surveyor ? survey.surveyor._id : currentUser.role === 'surveyor' ? currentUser._id : '');
+  var usage = survey && survey.monthlyUsage ? survey.monthlyUsage : [];
+  var oldMonths = oldInput.monthlyMonths || [];
+  var oldUnits = oldInput.monthlyUnits || [];
+  var oldBills = oldInput.monthlyBills || [];
+  var monthRows = [];
+  for (var offset = 11; offset >= 0; offset--) {
+    var date = new Date(); date.setDate(1); date.setMonth(date.getMonth() - offset);
+    var key = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0');
+    var found = usage.find(function (row) { return row.month === key; }) || usage[11 - offset] || {};
+    monthRows.push({ key: found.month || key, units: found.units || '', amount: found.amountPaisa ? found.amountPaisa / 100 : '' });
+  }
+%>
+<%- include('../partials/page-header', {
+  heading: isEdit ? 'Survey form - ' + survey.number : 'Schedule site survey',
+  subheading: isEdit ? 'Mobile-friendly field worksheet and photo capture' : 'Assign a surveyor and create the site visit',
+  actions: [{ label: 'Back', url: isEdit ? '/surveys/' + survey._id : '/surveys', icon: 'bi-arrow-left', class: 'btn-outline-secondary' }]
+}) %>
+
+<form method="POST" action="<%= formAction %>" enctype="multipart/form-data" class="survey-form mt-3" data-survey-form novalidate>
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+  <%- include('../partials/form-errors') %>
+
+  <div class="card app-card mb-3"><div class="card-header bg-transparent"><h2 class="h6 mb-0"><i class="bi bi-calendar-event me-2"></i>Visit</h2></div><div class="card-body"><div class="row g-3">
+    <% if (currentUser.role === 'surveyor' && isEdit) { var linked = survey.customer || {}; %>
+      <input type="hidden" name="customer" value="<%= survey.customer ? survey.customer._id : '' %>"><input type="hidden" name="surveyor" value="<%= currentUser._id %>">
+      <div class="col-12 col-md-6"><label class="form-label">Customer</label><div class="form-control bg-light"><%= linked.name || '—' %></div></div>
+      <div class="col-12 col-md-3"><label class="form-label">Surveyor</label><div class="form-control bg-light"><%= currentUser.name %></div></div>
+    <% } else { %>
+      <div class="col-12 col-md-4"><label for="customer" class="form-label">Customer</label><select class="form-select" id="customer" name="customer"><option value="">Select customer</option><% customers.forEach(function (row) { %><option value="<%= row._id %>" <%= String(customerId) === String(row._id) ? 'selected' : '' %>><%= row.code %> - <%= row.name %> (<%= row.phone %>)</option><% }) %></select></div>
+      <div class="col-12 col-md-4"><label for="surveyor" class="form-label">Surveyor <span class="text-danger">*</span></label><select class="form-select" id="surveyor" name="surveyor" required><option value="">Assign surveyor</option><% surveyors.forEach(function (row) { %><option value="<%= row._id %>" <%= String(surveyorId) === String(row._id) ? 'selected' : '' %>><%= row.name %></option><% }) %></select></div>
+    <% } %>
+    <div class="col-12 col-md-4"><label for="scheduledAt" class="form-label">Scheduled date and time <span class="text-danger">*</span></label><input type="datetime-local" class="form-control" id="scheduledAt" name="scheduledAt" value="<%= old('scheduledAt', scheduledDefault) %>" <%= currentUser.role === 'surveyor' ? 'readonly' : '' %> required></div>
+    <% if (isEdit) { %><div class="col-12 col-md-4"><label for="status" class="form-label">Status</label><select class="form-select" id="status" name="status"><% surveys.SURVEY_STATUSES.forEach(function (value) { %><option value="<%= value %>" <%= old('status', survey.status) === value ? 'selected' : '' %>><%= surveys.SURVEY_STATUS_LABELS[value] %></option><% }) %></select></div><% } else { %><input type="hidden" name="status" value="scheduled"><% } %>
+  </div></div></div>
+
+  <div class="card app-card mb-3"><div class="card-header bg-transparent"><h2 class="h6 mb-0"><i class="bi bi-house-gear me-2"></i>Roof and structure</h2></div><div class="card-body"><div class="row g-3">
+    <div class="col-6 col-md-3"><label for="roofType" class="form-label">Roof type</label><select class="form-select" id="roofType" name="roofType"><option value="">Select</option><% surveys.ROOF_TYPES.forEach(function (value) { %><option value="<%= value %>" <%= old('roofType', survey ? survey.roofType : '') === value ? 'selected' : '' %>><%= surveys.ROOF_TYPE_LABELS[value] %></option><% }) %></select></div>
+    <div class="col-6 col-md-3"><label for="roofAreaSqFt" class="form-label">Usable area (sq ft)</label><input type="number" class="form-control" id="roofAreaSqFt" name="roofAreaSqFt" min="0" step="0.1" value="<%= old('roofAreaSqFt', survey ? survey.roofAreaSqFt : '') %>"></div>
+    <div class="col-6 col-md-3"><label for="direction" class="form-label">Direction</label><select class="form-select" id="direction" name="direction"><option value="">Select</option><% surveys.DIRECTIONS.forEach(function (value) { %><option value="<%= value %>" <%= old('direction', survey ? survey.direction : '') === value ? 'selected' : '' %>><%= value.charAt(0).toUpperCase() + value.slice(1) %></option><% }) %></select></div>
+    <div class="col-6 col-md-3"><label for="tiltDegrees" class="form-label">Tilt (degrees)</label><input type="number" class="form-control" id="tiltDegrees" name="tiltDegrees" min="0" max="90" step="0.1" value="<%= old('tiltDegrees', survey ? survey.tiltDegrees : '') %>"></div>
+    <div class="col-6 col-md-3"><label for="shading" class="form-label">Shading</label><select class="form-select" id="shading" name="shading"><option value="">Select</option><% surveys.SHADING_LEVELS.forEach(function (value) { %><option value="<%= value %>" <%= old('shading', survey ? survey.shading : '') === value ? 'selected' : '' %>><%= value.charAt(0).toUpperCase() + value.slice(1) %></option><% }) %></select></div>
+    <div class="col-6 col-md-3"><label for="structureType" class="form-label">Structure</label><select class="form-select" id="structureType" name="structureType"><option value="">Select</option><% surveys.STRUCTURE_TYPES.forEach(function (value) { %><option value="<%= value %>" <%= old('structureType', survey ? survey.structureType : '') === value ? 'selected' : '' %>><%= value.replace(/_/g, ' ') %></option><% }) %></select></div>
+    <div class="col-6 col-md-3"><label for="floorHeight" class="form-label">Floor height (ft)</label><input type="number" class="form-control" id="floorHeight" name="floorHeight" min="0" step="0.1" value="<%= old('floorHeight', survey ? survey.floorHeight : '') %>"></div>
+    <div class="col-6 col-md-3"><label for="cableDistanceMeters" class="form-label">Cable distance (m)</label><input type="number" class="form-control" id="cableDistanceMeters" name="cableDistanceMeters" min="0" step="0.1" value="<%= old('cableDistanceMeters', survey ? survey.cableDistanceMeters : '') %>"></div>
+  </div></div></div>
+
+  <div class="card app-card mb-3"><div class="card-header bg-transparent d-flex justify-content-between align-items-center"><h2 class="h6 mb-0"><i class="bi bi-lightning-charge me-2"></i>12-month electricity usage</h2><span class="badge text-bg-light border" data-average-units>Average: 0 units</span></div><div class="card-body">
+    <div class="row g-2"><% monthRows.forEach(function (row, index) { %><div class="col-6 col-md-3 col-xl-2"><input type="hidden" name="monthlyMonths[<%= index %>]" value="<%= oldMonths[index] || row.key %>"><label class="form-label small text-muted"><%= row.key %></label><div class="input-group input-group-sm mb-1"><input type="number" class="form-control" name="monthlyUnits[<%= index %>]" value="<%= oldUnits[index] !== undefined ? oldUnits[index] : row.units %>" min="0" step="0.1" placeholder="Units" data-monthly-units><span class="input-group-text">u</span></div><div class="input-group input-group-sm"><span class="input-group-text">Rs</span><input type="number" class="form-control" name="monthlyBills[<%= index %>]" value="<%= oldBills[index] !== undefined ? oldBills[index] : row.amount %>" min="0" step="0.01" placeholder="Bill"></div></div><% }) %></div>
+  </div></div>
+
+  <div class="card app-card mb-3"><div class="card-header bg-transparent"><h2 class="h6 mb-0"><i class="bi bi-speedometer me-2"></i>Electrical and recommendation</h2></div><div class="card-body"><div class="row g-3">
+    <div class="col-6 col-md-3"><label for="sanctionedLoadKw" class="form-label">Sanctioned load (kW)</label><input type="number" class="form-control" id="sanctionedLoadKw" name="sanctionedLoadKw" min="0" step="0.1" value="<%= old('sanctionedLoadKw', survey ? survey.sanctionedLoadKw : '') %>"></div>
+    <div class="col-6 col-md-3"><label for="phase" class="form-label">Phase</label><select class="form-select" id="phase" name="phase"><option value="">Select</option><% surveys.PHASES.forEach(function (value) { %><option value="<%= value %>" <%= old('phase', survey ? survey.phase : '') === value ? 'selected' : '' %>><%= value === 'three' ? 'Three phase' : 'Single phase' %></option><% }) %></select></div>
+    <div class="col-6 col-md-3"><label for="meterType" class="form-label">Meter type</label><select class="form-select" id="meterType" name="meterType"><option value="">Select</option><% surveys.METER_TYPES.forEach(function (value) { %><option value="<%= value %>" <%= old('meterType', survey ? survey.meterType : '') === value ? 'selected' : '' %>><%= value.replace(/_/g, ' ') %></option><% }) %></select></div>
+    <div class="col-6 col-md-3"><label for="systemType" class="form-label">System type</label><select class="form-select" id="systemType" name="systemType"><option value="">Select</option><% surveys.SYSTEM_TYPES.forEach(function (value) { %><option value="<%= value %>" <%= old('systemType', survey ? survey.systemType : '') === value ? 'selected' : '' %>><%= surveys.SYSTEM_TYPE_LABELS[value] %></option><% }) %></select></div>
+    <div class="col-12 col-md-4"><label for="recommendedKw" class="form-label">Recommended kW</label><div class="input-group"><input type="number" class="form-control" id="recommendedKw" name="recommendedKw" min="0" step="0.1" value="<%= old('recommendedKw', survey ? survey.recommendedKw : '') %>" data-recommended-kw><span class="input-group-text">kW</span></div><div class="form-text" data-sizing-suggestion data-production="<%= sizingSettings.surveyMonthlyUnitsPerKw || 120 %>" data-buffer="<%= sizingSettings.surveySizingBufferPercent || 15 %>" data-step="<%= sizingSettings.surveySizeStepKw || 0.5 %>">Enter monthly units for a suggestion.</div></div>
+    <div class="col-12 col-md-8"><label for="remarks" class="form-label">Remarks</label><textarea class="form-control" id="remarks" name="remarks" rows="3" maxlength="3000"><%= old('remarks', survey ? survey.remarks : '') %></textarea></div>
+  </div></div></div>
+
+  <div class="card app-card mb-3"><div class="card-header bg-transparent"><h2 class="h6 mb-0"><i class="bi bi-camera me-2"></i>Site photographs</h2></div><div class="card-body"><div class="row g-3">
+    <% [['roofPhotos','Roof'],['meterPhotos','Meter'],['billPhotos','Electricity bill'],['dbPanelPhotos','DB panel']].forEach(function (field) { %><div class="col-12 col-sm-6"><label class="form-label" for="<%= field[0] %>"><%= field[1] %></label><input type="file" class="form-control" id="<%= field[0] %>" name="<%= field[0] %>" accept="image/jpeg,image/png" multiple capture="environment"><div class="form-text">JPG or PNG, up to 5 MB each. Maximum 5.</div></div><% }) %>
+  </div></div></div>
+
+  <div class="survey-form-actions"><a class="btn btn-outline-secondary" href="<%= isEdit ? '/surveys/' + survey._id : '/surveys' %>">Cancel</a><button class="btn btn-primary flex-grow-1" type="submit" data-submit-once><i class="bi bi-check2-circle me-1"></i><%= isEdit ? 'Save survey' : 'Schedule survey' %></button></div>
+</form>
+<script src="/js/surveys.js"></script>

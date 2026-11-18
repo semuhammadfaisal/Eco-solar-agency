@@ -1,0 +1,192 @@
+<%
+  // Closing-time reminder popup. Only rendered when middleware/closingReminder
+  // injected `closingReminder` for the current page request.
+  var reminder = (typeof closingReminder !== 'undefined' && closingReminder) ? closingReminder : null;
+%>
+<% if (reminder) { %>
+  <%
+    var reminderReturnTo = typeof currentPath !== 'undefined' && currentPath ? currentPath : '/dashboard';
+    var reminderExpected = Number(reminder.expectedCashPaisa || 0);
+    var reminderCloser = currentUser ? (currentUser.name || currentUser.branchName || '') : '';
+  %>
+  <div class="modal fade" id="closingReminderModal" tabindex="-1" aria-labelledby="closingReminderModalLabel" aria-hidden="true"
+       data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header bg-warning-subtle">
+          <div>
+            <h5 class="modal-title fw-bold" id="closingReminderModalLabel">
+              <i class="bi bi-safe text-warning-emphasis me-2"></i>Time to close the cash drawer
+            </h5>
+            <div class="small text-muted mt-1">
+              <%= reminder.branchCode %> — <%= reminder.branchName %> · Business date <%= reminder.businessDateKey %> · Closing time <%= reminder.closingTime %>
+            </div>
+          </div>
+        </div>
+
+        <form method="POST" action="/accounting/daily-closing/quick-close" id="closingReminderForm" novalidate>
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input type="hidden" name="branch" value="<%= reminder.branchId %>">
+          <input type="hidden" name="businessDate" value="<%= reminder.businessDateKey %>">
+          <input type="hidden" name="returnTo" value="<%= reminderReturnTo %>">
+
+          <div class="modal-body">
+            <div class="row g-4">
+              <div class="col-12 col-lg-6">
+                <div class="rounded border bg-light p-3 small">
+                  <div class="d-flex justify-content-between py-1">
+                    <span class="text-muted">Opening float</span>
+                    <span class="font-monospace"><%= formatPKR(reminder.openingFloatPaisa) %></span>
+                  </div>
+                  <div class="d-flex justify-content-between py-1">
+                    <span class="text-muted">POS cash receipts</span>
+                    <span class="font-monospace text-success">+<%= formatPKR(reminder.cashSalesPaisa) %></span>
+                  </div>
+                  <div class="d-flex justify-content-between py-1">
+                    <span class="text-muted">Cash expenses</span>
+                    <span class="font-monospace text-danger">−<%= formatPKR(reminder.cashExpensesPaisa) %></span>
+                  </div>
+                  <div class="d-flex justify-content-between py-1">
+                    <span class="text-muted">Manual cash in</span>
+                    <span class="font-monospace text-success">+<%= formatPKR(reminder.cashInPaisa) %></span>
+                  </div>
+                  <div class="d-flex justify-content-between py-1">
+                    <span class="text-muted">Manual cash out</span>
+                    <span class="font-monospace text-danger">−<%= formatPKR(reminder.cashOutPaisa) %></span>
+                  </div>
+                  <hr class="my-2">
+                  <div class="d-flex justify-content-between fw-bold">
+                    <span>Expected cash</span>
+                    <span class="font-monospace"><%= formatPKR(reminder.expectedCashPaisa) %></span>
+                  </div>
+                </div>
+
+                <div class="mt-3">
+                  <label for="reminderClosedByName" class="form-label fw-semibold">Who is closing? <span class="text-danger">*</span></label>
+                  <input type="text" name="closedByName" id="reminderClosedByName" class="form-control"
+                         value="<%= reminderCloser %>" maxlength="150" placeholder="Full name of the person closing" required>
+                </div>
+
+                <div class="mt-3">
+                  <label for="reminderCountedCash" class="form-label fw-semibold">Counted cash in drawer (PKR) <span class="text-danger">*</span></label>
+                  <input type="text" name="countedCash" id="reminderCountedCash" class="form-control form-control-lg font-monospace"
+                         inputmode="decimal" placeholder="0.00" required>
+                </div>
+
+                <div class="rounded border p-3 mt-3">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <span class="fw-semibold small">Variance</span>
+                    <span class="font-monospace fw-bold" id="reminderVariance">PKR 0</span>
+                  </div>
+                  <div class="form-text mb-0">Counted cash minus expected cash.</div>
+                </div>
+
+                <div class="mt-3" id="reminderVarianceReasonWrap">
+                  <label for="reminderVarianceReason" class="form-label fw-semibold">Variance reason</label>
+                  <textarea name="varianceReason" id="reminderVarianceReason" class="form-control" rows="2" maxlength="500"
+                            placeholder="Required when the count differs from expected"></textarea>
+                </div>
+              </div>
+
+              <div class="col-12 col-lg-6">
+                <h6 class="text-uppercase text-muted small fw-semibold">Extra cash in / out before closing</h6>
+                <p class="small text-muted">Optional. Use this for a last-minute cash drop, change brought in, or a small purchase paid from the drawer.</p>
+
+                <div class="row g-2 mb-2">
+                  <div class="col-6">
+                    <label for="reminderCashIn" class="form-label small fw-semibold">Cash in (PKR)</label>
+                    <input type="text" name="cashIn" id="reminderCashIn" class="form-control form-control-sm" inputmode="decimal" placeholder="0.00">
+                  </div>
+                  <div class="col-6">
+                    <label for="reminderCashOut" class="form-label small fw-semibold">Cash out (PKR)</label>
+                    <input type="text" name="cashOut" id="reminderCashOut" class="form-control form-control-sm" inputmode="decimal" placeholder="0.00">
+                  </div>
+                </div>
+                <div class="mb-3">
+                  <label for="reminderCashInReason" class="form-label small fw-semibold">Cash-in reason</label>
+                  <input type="text" name="cashInReason" id="reminderCashInReason" class="form-control form-control-sm" maxlength="300" placeholder="e.g. Change brought from bank">
+                </div>
+                <div class="mb-3">
+                  <label for="reminderCashOutReason" class="form-label small fw-semibold">Cash-out reason</label>
+                  <input type="text" name="cashOutReason" id="reminderCashOutReason" class="form-control form-control-sm" maxlength="300" placeholder="e.g. Paid for shop cleaning">
+                </div>
+
+                <div class="mb-3">
+                  <label for="reminderNotes" class="form-label small fw-semibold">Closing notes</label>
+                  <textarea name="notes" id="reminderNotes" class="form-control form-control-sm" rows="2" maxlength="1000" placeholder="Optional handover notes"></textarea>
+                </div>
+
+                <div class="alert alert-light border small mb-0">
+                  <i class="bi bi-shield-check me-1 text-success"></i>
+                  The count is locked when you close. A non-zero variance is posted to
+                  <strong>6070 Cash Over &amp; Short</strong> and recorded in the audit trail.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer justify-content-between">
+            <button type="submit" form="closingSnoozeForm" class="btn btn-outline-secondary">
+              <i class="bi bi-alarm me-1"></i>Remind me in 30 minutes
+            </button>
+            <div class="d-flex gap-2">
+              <a href="/accounting/daily-closing?branch=<%= reminder.branchId %>&date=<%= reminder.businessDateKey %>" class="btn btn-outline-primary">
+                <i class="bi bi-list-check me-1"></i>Full drawer page
+              </a>
+              <button type="submit" class="btn btn-success">
+                <i class="bi bi-lock me-1"></i>Close drawer now
+              </button>
+            </div>
+          </div>
+        </form>
+
+        <form method="POST" action="/accounting/daily-closing/snooze" id="closingSnoozeForm" class="d-none">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input type="hidden" name="businessDate" value="<%= reminder.businessDateKey %>">
+          <input type="hidden" name="returnTo" value="<%= reminderReturnTo %>">
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var modalEl = document.getElementById('closingReminderModal');
+      if (!modalEl || !window.bootstrap) return;
+      var form = document.getElementById('closingReminderForm');
+      var expected = <%= reminderExpected %> / 100;
+      var countedInput = document.getElementById('reminderCountedCash');
+      var varianceEl = document.getElementById('reminderVariance');
+      var reasonWrap = document.getElementById('reminderVarianceReasonWrap');
+      var reasonInput = document.getElementById('reminderVarianceReason');
+
+      function parseAmount(value) {
+        var n = parseFloat(String(value || '').replace(/,/g, ''));
+        return isFinite(n) ? n : 0;
+      }
+      function money(value) {
+        return 'PKR ' + Number(value || 0).toLocaleString('en-PK', {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 2
+        });
+      }
+      function recalc() {
+        var counted = parseAmount(countedInput.value);
+        var variance = Math.round((counted - expected) * 100) / 100;
+        varianceEl.textContent = (variance > 0 ? '+' : '') + money(variance);
+        varianceEl.className = 'font-monospace fw-bold ' +
+          (variance === 0 ? 'text-success' : (variance > 0 ? 'text-warning-emphasis' : 'text-danger'));
+        reasonWrap.classList.toggle('d-none', variance === 0);
+        reasonInput.required = variance !== 0;
+      }
+
+      countedInput.addEventListener('input', recalc);
+      recalc();
+
+      window.bootstrap.Modal.getOrCreateInstance(modalEl, {
+        backdrop: 'static',
+        keyboard: false
+      }).show();
+    })();
+  </script>
+<% } %>

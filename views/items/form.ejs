@@ -1,0 +1,216 @@
+<%
+  var canViewCosts = can('purchase_prices.view');
+  var defaultCategory = item
+    ? item.category
+    : ((typeof initialCategory !== 'undefined' && initialCategory) ? initialCategory : 'other');
+  var selectedCategory = old('category', defaultCategory);
+  var initialUnit = old('unit', item ? item.unit : 'pcs');
+  var serialChecked = String(old('hasSerial', item && item.hasSerial ? '1' : '')) !== '';
+%>
+
+<%- include('../partials/page-header', {
+  heading: isEdit ? 'Edit item' : 'Add item',
+  subheading: isEdit
+    ? 'Update catalogue details, pricing and warranty terms.'
+    : 'Create a product in its category, then add stock when the units arrive.',
+  actions: [{ label: 'Back to inventory', url: '/items', icon: 'bi-arrow-left', class: 'btn-outline-secondary' }]
+}) %>
+
+<div class="row g-3 g-lg-4 mt-1">
+  <div class="col-12 col-xl-8">
+    <div class="card app-card">
+      <div class="card-body p-4">
+        <%- include('../partials/form-errors') %>
+
+        <form method="POST" action="<%= formAction %>" novalidate>
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <% if (isEdit) { %><input type="hidden" name="_method" value="PUT"><% } %>
+
+          <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Identity</h2>
+          <div class="row g-3">
+            <div class="col-12 col-md-4">
+              <label for="sku" class="form-label">SKU <span class="text-danger">*</span></label>
+              <input type="text" class="form-control text-uppercase font-monospace" id="sku" name="sku"
+                     value="<%= old('sku', item ? item.sku : '') %>" maxlength="40" required
+                     placeholder="PAN-550-JA">
+              <div class="form-text">Unique code, e.g. panel model or part number.</div>
+            </div>
+            <div class="col-12 col-md-8">
+              <label for="name" class="form-label">Item name <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="name" name="name"
+                     value="<%= old('name', item ? item.name : '') %>" maxlength="150" required
+                     placeholder="Jinko Tiger Neo 550 W panel">
+            </div>
+
+            <div class="col-6 col-md-4">
+              <label for="category" class="form-label">Category</label>
+              <select class="form-select" id="category" name="category">
+                <% inventory.ITEM_CATEGORIES.forEach(function (category) { %>
+                  <option value="<%= category %>"<%= selectedCategory === category ? ' selected' : '' %>>
+                    <%= inventory.ITEM_CATEGORY_LABELS[category] %>
+                  </option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="col-6 col-md-4">
+              <label for="unit" class="form-label">Unit</label>
+              <select class="form-select" id="unit" name="unit">
+                <% inventory.ITEM_UNITS.forEach(function (unit) { %>
+                  <option value="<%= unit %>"<%= initialUnit === unit ? ' selected' : '' %>>
+                    <%= inventory.ITEM_UNIT_LABELS[unit] %>
+                  </option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="col-12 col-md-4">
+              <label for="brandRef" class="form-label">Brand</label>
+              <select class="form-select" id="brandRef" name="brandRef">
+                <option value="">No managed brand</option>
+                <% brandOptions.forEach(function(option) { %><option value="<%= option._id %>" <%= item && String(item.brandRef || '') === String(option._id) ? 'selected' : '' %>><%= option.name %></option><% }); %>
+              </select>
+              <input type="hidden" name="brand" value="<%= old('brand', item ? item.brand : '') %>">
+              <div class="form-text"><a href="/brands">Manage brands</a></div>
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label for="model" class="form-label">Model</label>
+              <input type="text" class="form-control" id="model" name="model"
+                     value="<%= old('model', item ? item.model : '') %>" maxlength="100" placeholder="Tiger Neo N-Type">
+            </div>
+            <div class="col-6 col-md-4">
+              <label for="wattage" class="form-label">Wattage (W)</label>
+              <input type="number" class="form-control" id="wattage" name="wattage" min="0" step="0.01"
+                     value="<%= old('wattage', item && item.wattage !== null ? item.wattage : '') %>" placeholder="550">
+            </div>
+            <div class="col-6 col-md-4">
+              <label for="capacityKw" class="form-label">Capacity (kW)</label>
+              <input type="number" class="form-control" id="capacityKw" name="capacityKw" min="0" step="0.01"
+                     value="<%= old('capacityKw', item && item.capacityKw !== null ? item.capacityKw : '') %>" placeholder="10">
+            </div>
+
+            <div class="col-12">
+              <label for="specs" class="form-label">Specifications</label>
+              <textarea class="form-control" id="specs" name="specs" rows="3" maxlength="2000"
+                        placeholder="Cell type, efficiency, dimensions, IP rating…"><%= old('specs', item ? item.specs : '') %></textarea>
+            </div>
+          </div>
+
+          <hr class="my-4">
+
+          <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Stock &amp; serial tracking</h2>
+          <div class="row g-3 align-items-start">
+            <div class="col-6 col-md-4">
+              <label for="minStock" class="form-label">Minimum stock</label>
+              <input type="number" class="form-control" id="minStock" name="minStock" min="0" step="0.001"
+                     value="<%= old('minStock', item ? item.minStock : 0) %>">
+              <div class="form-text">Rows at or below this level are highlighted.</div>
+            </div>
+            <div class="col-6 col-md-4">
+              <label for="location" class="form-label">Default location</label>
+              <input type="text" class="form-control" id="location" name="location" maxlength="100"
+                     value="<%= old('location', item ? item.location : '') %>" placeholder="Main warehouse">
+            </div>
+            <div class="col-12 col-md-4">
+              <div class="form-check form-switch mt-md-4 pt-md-2">
+                <input class="form-check-input" type="checkbox" role="switch" id="hasSerial" name="hasSerial" value="1"
+                       <%= serialChecked ? 'checked' : '' %>>
+                <label class="form-check-label" for="hasSerial">Track serial numbers</label>
+              </div>
+              <div class="form-text">
+                Serialised items need one serial per unit on every GRN.
+                <% if (isEdit && item.hasSerial) { %><strong>This cannot be turned off once stock or serials exist.</strong><% } %>
+              </div>
+            </div>
+          </div>
+
+          <hr class="my-4">
+
+          <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Pricing</h2>
+          <div class="row g-3">
+            <% if (canViewCosts) { %>
+              <div class="col-12 col-md-4">
+                <label for="purchasePrice" class="form-label">Purchase price (PKR)</label>
+                <input type="text" class="form-control" id="purchasePrice" name="purchasePrice" inputmode="decimal"
+                       value="<%= old('purchasePrice', item && item.purchasePricePaisa ? (item.purchasePricePaisa / 100) : '') %>"
+                       placeholder="0.00">
+                <div class="form-text">Visible to owner, accountant and storekeeper only.</div>
+              </div>
+            <% } %>
+            <div class="col-12 col-md-4">
+              <label for="sellingPrice" class="form-label">Selling price (PKR)</label>
+              <input type="text" class="form-control" id="sellingPrice" name="sellingPrice" inputmode="decimal"
+                     value="<%= old('sellingPrice', item && item.sellingPricePaisa ? (item.sellingPricePaisa / 100) : '') %>"
+                     placeholder="0.00">
+            </div>
+            <div class="col-12 col-md-4">
+              <label for="wholesalePrice" class="form-label">Wholesale price (PKR)</label>
+              <input type="text" class="form-control" id="wholesalePrice" name="wholesalePrice" inputmode="decimal" value="<%= old('wholesalePrice', item && item.wholesalePricePaisa ? item.wholesalePricePaisa / 100 : '') %>">
+            </div>
+            <div class="col-12 col-md-4">
+              <label for="retailPrice" class="form-label">Retail price (PKR)</label>
+              <input type="text" class="form-control" id="retailPrice" name="retailPrice" inputmode="decimal" value="<%= old('retailPrice', item && item.retailPricePaisa ? item.retailPricePaisa / 100 : '') %>">
+            </div>
+            <div class="col-12 col-md-4">
+              <label for="maxDiscountPercent" class="form-label">Shopkeeper max discount (%)</label>
+              <input type="number" class="form-control" id="maxDiscountPercent" name="maxDiscountPercent" min="0" max="100" step="0.01" value="<%= old('maxDiscountPercent', item ? item.maxDiscountPercent : 0) %>">
+            </div>
+            <% if (!canViewCosts) { %>
+              <div class="col-12 col-md-8 d-flex align-items-center">
+                <div class="alert alert-light border small mb-0 py-2">
+                  <i class="bi bi-lock me-1"></i>Purchase prices are restricted to the owner, accountant and storekeeper.
+                </div>
+              </div>
+            <% } %>
+          </div>
+
+          <hr class="my-4">
+
+          <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Default warranty</h2>
+          <div class="row g-3">
+            <div class="col-6 col-md-4">
+              <label for="productWarrantyYears" class="form-label">Product warranty (years)</label>
+              <input type="number" class="form-control" id="productWarrantyYears" name="productWarrantyYears" min="0" max="50" step="1"
+                     value="<%= old('productWarrantyYears', item ? item.productWarrantyYears : 1) %>">
+            </div>
+            <div class="col-6 col-md-4">
+              <label for="performanceWarrantyYears" class="form-label">Performance warranty (years)</label>
+              <input type="number" class="form-control" id="performanceWarrantyYears" name="performanceWarrantyYears" min="0" max="50" step="1"
+                     value="<%= old('performanceWarrantyYears', item ? item.performanceWarrantyYears : 25) %>">
+            </div>
+            <div class="col-12 col-md-4 d-flex align-items-end">
+              <p class="form-text mb-2">These default dates are stamped onto serials when stock is received.</p>
+            </div>
+          </div>
+
+          <div class="mt-4">
+            <label for="notes" class="form-label">Notes</label>
+            <textarea class="form-control" id="notes" name="notes" rows="3" maxlength="1000"><%= old('notes', item ? item.notes : '') %></textarea>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2 justify-content-end mt-4">
+            <a href="<%= isEdit ? '/items/' + item._id : '/items' %>" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check2-circle me-1"></i><%= isEdit ? 'Save changes' : 'Create item' %>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-4">
+    <div class="card app-card bg-light-subtle">
+      <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">How stock works</h2></div>
+      <div class="card-body small text-muted">
+        <p>Stock only moves through auditable documents:</p>
+        <ul class="ps-3 mb-3">
+          <li><strong>Stock in</strong> adds units that arrived at a branch, with an optional serial list and unit cost.</li>
+          <li><strong>GRN</strong> adds purchased stock against a supplier purchase order and updates the average cost.</li>
+          <li><strong>Supplier return</strong> sends stock back and reduces the balance.</li>
+          <li><strong>Serial status</strong> moves individual units in and out of the warehouse.</li>
+        </ul>
+        <p class="mb-0">An item starts at zero stock. After saving it, use <strong>Add stock</strong> on the item page to receive the first units.</p>
+      </div>
+    </div>
+  </div>
+</div>

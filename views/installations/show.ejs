@@ -1,0 +1,468 @@
+<%- include('../partials/page-header', {
+  heading: 'Installation Project ' + installation.installationNumber,
+  subheading: (installation.customer ? installation.customer.name : 'Customer') + ' · ' + (installationsConfig.INSTALLATION_STATUS_LABELS[installation.status] || installation.status),
+  actions: [
+    ...(can('installations.commission') && installation.status !== 'commissioned' ? [{ label: 'Commission system', url: '#', icon: 'bi-patch-check-fill', class: 'btn-success', attrs: 'data-bs-toggle="modal" data-bs-target="#commissionModal"' }] : []),
+    ...(['completed', 'commissioned'].includes(installation.status) ? [{ label: 'Commissioning PDF', url: '/installations/' + installation._id + '/commissioning-pdf', icon: 'bi-file-earmark-pdf', class: 'btn-outline-primary', attrs: 'target="_blank"' }] : []),
+    { label: 'Back to projects', url: '/installations', icon: 'bi-arrow-left', class: 'btn-outline-secondary' }
+  ]
+}) %>
+
+<!-- Status Progression Pipeline -->
+<div class="card app-card mb-4 mt-2">
+  <div class="card-body p-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <%
+        const statuses = ['approved', 'material_issued', 'scheduled', 'in_progress', 'completed', 'net_metering_pending', 'commissioned'];
+        const currentIdx = statuses.indexOf(installation.status);
+      %>
+      <% statuses.forEach(function (st, idx) { %>
+        <div class="d-flex align-items-center gap-1">
+          <span class="badge rounded-pill <%= idx <= currentIdx ? 'bg-primary' : 'bg-light text-muted border' %> px-2 py-1">
+            <%= idx + 1 %>. <%= installationsConfig.INSTALLATION_STATUS_LABELS[st] || st %>
+          </span>
+          <% if (idx < statuses.length - 1) { %>
+            <i class="bi bi-chevron-right text-muted small d-none d-md-inline"></i>
+          <% } %>
+        </div>
+      <% }); %>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+
+  <!-- Left Column: Specs, Materials & Checklist -->
+  <div class="col-12 col-lg-8">
+
+    <!-- Card 1: System & Site Overview -->
+    <div class="card app-card mb-3">
+      <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0 fw-bold"><i class="bi bi-info-circle text-primary me-2"></i>Project & Technical Specs</h5>
+        <span class="badge text-bg-<%= installationsConfig.INSTALLATION_STATUS_BADGES[installation.status] || 'secondary' %>">
+          <%= installationsConfig.INSTALLATION_STATUS_LABELS[installation.status] || installation.status %>
+        </span>
+      </div>
+      <div class="card-body p-3">
+        <div class="row g-3">
+          <div class="col-6 col-md-3">
+            <div class="small text-muted">System Size</div>
+            <div class="fs-5 fw-bold text-dark">
+              <%= installation.sale && installation.sale.systemSummary ? installation.sale.systemSummary.capacityKw + ' kW' : '—' %>
+            </div>
+            <div class="text-muted small">
+              <%= installation.sale && installation.sale.systemSummary ? (installation.sale.systemSummary.systemType || '').replace('_', ' ').toUpperCase() : '' %>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="small text-muted">Panel Modules</div>
+            <div class="fs-5 fw-bold text-dark">
+              <%= installation.sale && installation.sale.systemSummary ? installation.sale.systemSummary.panelCount : '—' %>
+            </div>
+            <div class="text-muted small">PV Array Modules</div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="small text-muted">Scheduled Date</div>
+            <div class="fw-bold">
+              <%= installation.scheduledStartDate ? formatDate(installation.scheduledStartDate) : 'Not Scheduled' %>
+            </div>
+            <div class="text-muted small">
+              <%= installation.scheduledEndDate ? 'to ' + formatDate(installation.scheduledEndDate) : '' %>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="small text-muted">Lead Technician</div>
+            <div class="fw-bold">
+              <%= installation.leadTechnician ? installation.leadTechnician.name : 'Unassigned' %>
+            </div>
+            <div class="text-muted small"><%= installation.leadTechnician ? installation.leadTechnician.phone : '' %></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 2: Materials & Serial Numbers Issued -->
+    <div class="card app-card mb-3">
+      <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0 fw-bold"><i class="bi bi-box-seam text-primary me-2"></i>Materials & Serial Numbers Issued</h5>
+        <% if (can('material.issue') && installation.status !== 'commissioned') { %>
+          <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#issueMaterialModal">
+            <i class="bi bi-plus-lg me-1"></i>Issue Material from Stock
+          </button>
+        <% } %>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light small text-muted">
+              <tr>
+                <th>Item / Component</th>
+                <th>Qty</th>
+                <th>Serial Number</th>
+                <th>Issued At</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (!installation.materialsIssued || !installation.materialsIssued.length) { %>
+                <tr>
+                  <td colspan="4" class="text-center py-4 text-muted">
+                    No materials issued from warehouse yet.
+                    <% if (can('material.issue')) { %>
+                      <br><button type="button" class="btn btn-link btn-sm" data-bs-toggle="modal" data-bs-target="#issueMaterialModal">Issue items & serials now</button>
+                    <% } %>
+                  </td>
+                </tr>
+              <% } else { %>
+                <% installation.materialsIssued.forEach(function (mat) { %>
+                  <tr>
+                    <td>
+                      <div class="fw-semibold"><%= mat.item ? mat.item.name : 'Item' %></div>
+                      <div class="small text-muted"><%= mat.item ? mat.item.sku : '' %></div>
+                    </td>
+                    <td><%= mat.qty %></td>
+                    <td>
+                      <% if (mat.serialString) { %>
+                        <code class="fw-bold"><%= mat.serialString %></code>
+                      <% } else { %>
+                        <span class="text-muted small">Standard SKU</span>
+                      <% } %>
+                    </td>
+                    <td class="small text-muted"><%= formatDateTime(mat.issuedAt) %></td>
+                  </tr>
+                <% }); %>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 3: Technical Checklist & Testing Measurements -->
+    <div class="card app-card mb-3">
+      <div class="card-header bg-transparent py-3">
+        <h5 class="card-title mb-0 fw-bold"><i class="bi bi-clipboard2-check text-success me-2"></i>Installation Checklist & Field Readings</h5>
+      </div>
+      <div class="card-body p-3">
+        <form method="POST" action="/installations/<%= installation._id %>/checklist">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+          <!-- Electrical Measurements Inputs -->
+          <div class="row g-2 mb-3 bg-light p-3 rounded">
+            <div class="col-12"><strong class="small text-uppercase text-muted">Field Multimeter & Safety Readings</strong></div>
+            <div class="col-6 col-md-3">
+              <label class="form-label small fw-semibold">DC Voc (Volts)</label>
+              <input type="number" step="0.1" class="form-control form-control-sm" name="readings[vocReadingVolts]"
+                     value="<%= installation.readings ? installation.readings.vocReadingVolts : '' %>" placeholder="e.g. 450.5">
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label small fw-semibold">DC Isc (Amps)</label>
+              <input type="number" step="0.1" class="form-control form-control-sm" name="readings[iscReadingAmps]"
+                     value="<%= installation.readings ? installation.readings.iscReadingAmps : '' %>" placeholder="e.g. 13.2">
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label small fw-semibold">Earth Pit (Ohms &lt; 5Ω)</label>
+              <input type="number" step="0.01" class="form-control form-control-sm" name="readings[earthResistanceOhms]"
+                     value="<%= installation.readings ? installation.readings.earthResistanceOhms : '' %>" placeholder="e.g. 2.45">
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label small fw-semibold">AC Grid (Volts)</label>
+              <input type="number" step="0.1" class="form-control form-control-sm" name="readings[gridVoltageVolts]"
+                     value="<%= installation.readings ? installation.readings.gridVoltageVolts : '' %>" placeholder="e.g. 235">
+            </div>
+          </div>
+
+          <!-- Checklist Toggles -->
+          <div class="row g-2 mb-3">
+            <% checklistDef.forEach(function (chk) { %>
+              <div class="col-12 col-md-6">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" name="checklist[<%= chk.key %>]" id="chk_<%= chk.key %>"
+                         <%= installation.checklist && installation.checklist[chk.key] ? 'checked' : '' %>>
+                  <label class="form-check-label small" for="chk_<%= chk.key %>"><%= chk.label %></label>
+                </div>
+              </div>
+            <% }); %>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-2">
+              <label class="form-label small fw-semibold mb-0">Project Status:</label>
+              <select class="form-select form-select-sm" name="status" style="width: auto;">
+                <option value="in_progress" <%= installation.status === 'in_progress' ? 'selected' : '' %>>In Progress</option>
+                <option value="completed" <%= installation.status === 'completed' ? 'selected' : '' %>>Completed</option>
+                <option value="net_metering_pending" <%= installation.status === 'net_metering_pending' ? 'selected' : '' %>>Net Metering Pending</option>
+              </select>
+            </div>
+            <button type="submit" class="btn btn-sm btn-primary">
+              <i class="bi bi-check-lg me-1"></i>Save Checklist & Readings
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Right Column: Actions, Customer Sign-off, Details -->
+  <div class="col-12 col-lg-4">
+
+    <!-- Customer Card -->
+    <div class="card app-card mb-3">
+      <div class="card-header bg-transparent py-2">
+        <h6 class="card-title mb-0 fw-bold"><i class="bi bi-person text-primary me-2"></i>Customer Info</h6>
+      </div>
+      <div class="card-body p-3">
+        <% const c = installation.customer || {}; %>
+        <h6 class="fw-bold mb-1"><a href="/customers/<%= c._id %>" class="text-dark text-decoration-none"><%= c.name %></a></h6>
+        <div class="small text-muted mb-2"><i class="bi bi-telephone me-1"></i><%= c.phone %></div>
+        <div class="small text-muted mb-2"><i class="bi bi-geo-alt me-1"></i><%= [c.address, c.area, c.city].filter(Boolean).join(', ') || 'N/A' %></div>
+        <% if (c.gps && c.gps.lat) { %>
+          <div class="mb-3">
+            <a href="https://maps.google.com/?q=<%= c.gps.lat %>,<%= c.gps.lng %>" target="_blank" class="btn btn-sm btn-outline-primary w-100">
+              <i class="bi bi-map me-1"></i>Open Site GPS Location
+            </a>
+          </div>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Customer Sign-Off Card -->
+    <div class="card app-card mb-3">
+      <div class="card-header bg-transparent py-2 d-flex justify-content-between align-items-center">
+        <h6 class="card-title mb-0 fw-bold"><i class="bi bi-pen text-primary me-2"></i>Customer Sign-Off</h6>
+        <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#signoffModal">
+          <%= installation.customerSignoff && installation.customerSignoff.signedBy ? 'Update Sign-Off' : 'Record Sign-Off' %>
+        </button>
+      </div>
+      <div class="card-body p-3">
+        <% const cs = installation.customerSignoff || {}; %>
+        <% if (cs.signedBy) { %>
+          <div class="small text-success fw-bold mb-1"><i class="bi bi-check-circle-fill me-1"></i>Signed & Approved</div>
+          <div class="small"><strong>Signed by:</strong> <%= cs.signedBy %> (<%= cs.signerCnic || 'CNIC Verified' %>)</div>
+          <div class="small"><strong>Date:</strong> <%= formatDate(cs.signedAt) %></div>
+          <div class="small"><strong>Rating:</strong> <%= '★'.repeat(cs.rating || 5) %></div>
+          <% if (cs.feedback) { %>
+            <div class="small text-muted mt-2 border-top pt-2"><em>"<%= cs.feedback %>"</em></div>
+          <% } %>
+        <% } else { %>
+          <div class="text-muted small py-2 text-center">Customer sign-off pending.</div>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Actions Panel -->
+    <div class="card app-card mb-3">
+      <div class="card-header bg-transparent py-2">
+        <h6 class="card-title mb-0 fw-bold"><i class="bi bi-gear text-primary me-2"></i>Actions</h6>
+      </div>
+      <div class="card-body p-3 d-grid gap-2">
+        <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#scheduleModal">
+          <i class="bi bi-calendar-event me-1"></i>Update Schedule & Team
+        </button>
+
+        <% if (['completed', 'commissioned'].includes(installation.status)) { %>
+          <a href="/installations/<%= installation._id %>/commissioning-pdf" target="_blank" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-file-earmark-pdf me-1"></i>Download Commissioning Report PDF
+          </a>
+        <% } %>
+
+        <% if (can('installations.commission') && installation.status !== 'commissioned') { %>
+          <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#commissionModal">
+            <i class="bi bi-patch-check-fill me-1"></i>Commission System & Activate Warranties
+          </button>
+        <% } %>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Modal: Issue Material from Stock -->
+<div class="modal fade" id="issueMaterialModal" tabindex="-1" aria-labelledby="issueMaterialModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="POST" action="/installations/<%= installation._id %>/issue-materials">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+        <div class="modal-header">
+          <h5 class="modal-title" id="issueMaterialModalLabel"><i class="bi bi-box-seam me-2"></i>Issue Materials from Stock</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          <p class="small text-muted mb-3">
+            Select items from live inventory. For serialised items (panels, inverters, batteries), enter or paste the exact in-stock serial numbers (one per line or comma-separated).
+          </p>
+
+          <div class="row g-2 mb-3">
+            <div class="col-12 col-md-6">
+              <label class="form-label small fw-semibold">Select Equipment Item *</label>
+              <select class="form-select form-select-sm" name="itemId" required>
+                <option value="">Choose item...</option>
+                <% availableItems.forEach(function (it) { %>
+                  <option value="<%= it._id %>">
+                    <%= it.name %> (<%= it.sku %>) - Stock: <%= it.currentStock %> <%= it.unit %> <%= it.hasSerial ? '[Serialised]' : '' %>
+                  </option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label small fw-semibold">Quantity *</label>
+              <input type="number" min="1" class="form-control form-control-sm" name="qty" value="1" required>
+            </div>
+            <div class="col-12 col-md-12">
+              <label class="form-label small fw-semibold">Serial Numbers (for serialised components)</label>
+              <textarea class="form-control form-control-sm" name="serials" rows="2"
+                        placeholder="Paste serial numbers (e.g. SN-PANEL-001, SN-PANEL-002)..."></textarea>
+            </div>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Warehouse / Dispatch Notes</label>
+            <input type="text" class="form-control form-control-sm" name="notes" placeholder="e.g. Dispatched with Technician Team A via Van #3...">
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light border btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm">Issue Materials</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Update Schedule -->
+<div class="modal fade" id="scheduleModal" tabindex="-1" aria-labelledby="scheduleModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="/installations/<%= installation._id %>/schedule">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+        <div class="modal-header">
+          <h5 class="modal-title" id="scheduleModalLabel"><i class="bi bi-calendar-event me-2"></i>Schedule & Technician Team</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Lead Installation Engineer / Technician</label>
+            <select class="form-select form-select-sm" name="leadTechnician">
+              <option value="">Select lead technician...</option>
+              <% technicians.forEach(function (t) { %>
+                <option value="<%= t._id %>" <%= installation.leadTechnician && String(installation.leadTechnician._id || installation.leadTechnician) === String(t._id) ? 'selected' : '' %>>
+                  <%= t.name %> (<%= t.role %>)
+                </option>
+              <% }); %>
+            </select>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label small fw-semibold">Start Date *</label>
+              <input type="date" class="form-control form-control-sm" name="scheduledStartDate"
+                     value="<%= installation.scheduledStartDate ? installation.scheduledStartDate.toISOString().split('T')[0] : '' %>" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-semibold">Target End Date</label>
+              <input type="date" class="form-control form-control-sm" name="scheduledEndDate"
+                     value="<%= installation.scheduledEndDate ? installation.scheduledEndDate.toISOString().split('T')[0] : '' %>">
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light border btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm">Update Schedule</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Customer Sign-off -->
+<div class="modal fade" id="signoffModal" tabindex="-1" aria-labelledby="signoffModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="/installations/<%= installation._id %>/signoff">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+        <div class="modal-header">
+          <h5 class="modal-title" id="signoffModalLabel"><i class="bi bi-pen me-2"></i>Customer Acceptance & Sign-off</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Customer / Authorized Signer Name *</label>
+            <input type="text" class="form-control form-control-sm" name="signedBy"
+                   value="<%= installation.customerSignoff ? installation.customerSignoff.signedBy : (installation.customer ? installation.customer.name : '') %>" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Signer CNIC Number</label>
+            <input type="text" class="form-control form-control-sm" name="signerCnic"
+                   value="<%= installation.customerSignoff ? installation.customerSignoff.signerCnic : (installation.customer ? installation.customer.cnic : '') %>">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Customer Satisfaction Rating</label>
+            <select class="form-select form-select-sm" name="rating">
+              <option value="5" <%= installation.customerSignoff && installation.customerSignoff.rating === 5 ? 'selected' : '' %>>★★★★★ - Outstanding Quality</option>
+              <option value="4" <%= installation.customerSignoff && installation.customerSignoff.rating === 4 ? 'selected' : '' %>>★★★★☆ - Very Good</option>
+              <option value="3" <%= installation.customerSignoff && installation.customerSignoff.rating === 3 ? 'selected' : '' %>>★★★☆☆ - Satisfactory</option>
+              <option value="2" <%= installation.customerSignoff && installation.customerSignoff.rating === 2 ? 'selected' : '' %>>★★☆☆☆ - Needs Improvement</option>
+              <option value="1" <%= installation.customerSignoff && installation.customerSignoff.rating === 1 ? 'selected' : '' %>>★☆☆☆☆ - Dissatisfied</option>
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Customer Feedback / Comments</label>
+            <textarea class="form-control form-control-sm" name="feedback" rows="2"
+                      placeholder="e.g. System tested and inverter Wi-Fi paired. Generation confirmed..."><%= installation.customerSignoff ? installation.customerSignoff.feedback : '' %></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light border btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm">Save Sign-Off</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Commission System -->
+<div class="modal fade" id="commissionModal" tabindex="-1" aria-labelledby="commissionModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="/installations/<%= installation._id %>/commission">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+        <div class="modal-header">
+          <h5 class="modal-title" id="commissionModalLabel"><i class="bi bi-patch-check-fill text-success me-2"></i>Commission System</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="alert alert-success small mb-3">
+            <i class="bi bi-info-circle me-1"></i>
+            Commissioning will mark the project as fully live, update all installed hardware serial numbers to <strong>installed</strong>, and automatically issue official <strong>Warranty Certificates</strong> for panel product/performance, inverters, batteries, and workmanship.
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Commissioning & Handover Notes</label>
+            <textarea class="form-control form-control-sm" name="commissioningNotes" rows="3"
+                      placeholder="e.g. Net-metering green meter energized by DISCO. Solar export verified..."></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light border btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-success btn-sm">Authorize Commissioning</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

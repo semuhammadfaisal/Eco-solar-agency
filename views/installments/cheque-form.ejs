@@ -1,0 +1,420 @@
+<%
+  function jsonAttr(value) {
+    return JSON.stringify(value)
+      .replace(/</g, '\\u003c')
+      .replace(/>/g, '\\u003e')
+      .replace(/&/g, '\\u0026')
+      .replace(/'/g, '\\u0027');
+  }
+
+  var initial = {
+    customer: old('customer', preselected.customer || ''),
+    sale: old('sale', preselected.sale || ''),
+    posSale: old('posSale', preselected.posSale || ''),
+    plan: old('installmentPlan', preselected.plan || '')
+  };
+
+  var chequeFormData = {
+    customers: customers,
+    sales: sales,
+    posSales: posSales,
+    plans: plans,
+    initial: initial
+  };
+
+  var today = new Date().toISOString().slice(0, 10);
+%>
+
+<%- include('../partials/page-header', {
+  heading: 'Add Cheque to Vault',
+  subheading: 'Register a cheque and link it to the customer, project / sale, POS order and installment plan it pays for.',
+  actions: [
+    { label: 'Back to register', url: '/installments/cheques', icon: 'bi-arrow-left', class: 'btn-outline-secondary' }
+  ]
+}) %>
+
+<div class="mt-2" x-data='chequeForm(<%- jsonAttr(chequeFormData) %>)' x-init="init()">
+  <form method="POST" action="/installments/cheques" novalidate>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+    <%- include('../partials/form-errors') %>
+
+    <div class="row g-3 g-lg-4">
+      <div class="col-12 col-xl-8">
+        <!-- Who is paying -->
+        <div class="card app-card mb-3">
+          <div class="card-header bg-transparent py-3">
+            <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+              <i class="bi bi-person-badge"></i> Who is paying
+            </h3>
+          </div>
+          <div class="card-body p-3 p-md-4">
+            <label for="customer" class="form-label">Customer <span class="text-danger">*</span></label>
+            <select class="form-select form-select-lg" id="customer" name="customer"
+                    x-model="customer" @change="onCustomerChange()" required>
+              <option value="">Choose the customer who issued the cheque…</option>
+              <% customers.forEach(function (customer) { %>
+                <option value="<%= customer._id %>"
+                  <%= String(old('customer', preselected.customer || '')) === String(customer._id) ? 'selected' : '' %>>
+                  <%= customer.name %><%= customer.code ? ' (' + customer.code + ')' : '' %><%= customer.phone ? ' · ' + customer.phone : '' %><%= customer.city ? ' · ' + customer.city : '' %>
+                </option>
+              <% }); %>
+            </select>
+            <div class="form-text">
+              The cheque is always recorded against a customer. Pick a project, order or plan below to show what the payment is for.
+            </div>
+          </div>
+        </div>
+
+        <!-- What it pays for -->
+        <div class="card app-card mb-3">
+          <div class="card-header bg-transparent py-3">
+            <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+              <i class="bi bi-briefcase"></i> What this cheque pays for
+            </h3>
+          </div>
+          <div class="card-body p-3 p-md-4">
+            <div class="row g-3">
+              <div class="col-12">
+                <label for="sale" class="form-label">Project / Sale / Order</label>
+                <select class="form-select" id="sale" name="sale" x-model="saleId" @change="onSaleChange()">
+                  <option value="">Not linked to a project (general payment)</option>
+                  <% sales.forEach(function (sale) { %>
+                    <% var capKw = Number(sale.systemSummary ? sale.systemSummary.capacityKw : 0) || 0; %>
+                    <option value="<%= sale._id %>"
+                      <%= String(old('sale', preselected.sale || '')) === String(sale._id) ? 'selected' : '' %>>
+                      <%= sale.saleNumber %> — <%= sale.projectTitle || (sale.customer ? sale.customer.name + ' project' : 'Solar project') %>
+                      <%= sale.customer ? ' (' + sale.customer.name + ')' : '' %>
+                      <%= capKw > 0 ? '· ' + formatQty(capKw) + ' kW ' : '· ' %>
+                      <%= systems.SYSTEM_TYPE_LABELS[sale.systemSummary ? sale.systemSummary.systemType : 'on_grid'] || 'Solar' %>
+                      · <%= formatPKR(sale.amountPaisa) %>
+                    </option>
+                  <% }); %>
+                </select>
+                <div class="form-text">The solar system / project the payment belongs to.</div>
+              </div>
+
+              <div class="col-12">
+                <label for="posSale" class="form-label">Fast Sale / POS order</label>
+                <select class="form-select" id="posSale" name="posSale" x-model="posSaleId" @change="onPosSaleChange()">
+                  <option value="">Not linked to a POS order</option>
+                  <% posSales.forEach(function (order) { %>
+                    <option value="<%= order._id %>"
+                      <%= String(old('posSale', preselected.posSale || '')) === String(order._id) ? 'selected' : '' %>>
+                      <%= order.number %> — <%= order.customer ? order.customer.name : (order.customerName || 'Walk-in customer') %>
+                      · <%= formatPKR(order.totalPaisa) %>
+                      · <%= formatDate(order.soldAt) %>
+                    </option>
+                  <% }); %>
+                </select>
+                <div class="form-text">Use this when the cheque pays for a counter / POS sale.</div>
+              </div>
+
+              <div class="col-12 col-md-8">
+                <label for="installmentPlan" class="form-label">Installment plan</label>
+                <select class="form-select" id="installmentPlan" name="installmentPlan"
+                        x-model="planId" @change="onPlanChange()">
+                  <option value="">Not linked to an installment plan</option>
+                  <template x-for="plan in filteredPlans" :key="plan._id">
+                    <option :value="plan._id"
+                            :selected="String(plan._id) === String(planId)"
+                            x-text="planLabel(plan)"></option>
+                  </template>
+                </select>
+                <div class="form-text">Only plans for the selected customer / project are listed.</div>
+              </div>
+
+              <div class="col-12 col-md-4" x-show="planId" x-cloak>
+                <label for="installmentNumber" class="form-label">Installment #</label>
+                <input type="number" class="form-control" id="installmentNumber" name="installmentNumber"
+                       min="1" step="1" value="<%= old('installmentNumber', '') %>"
+                       placeholder="e.g. 2">
+                <div class="form-text">Optional: which installment this cheque settles.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cheque details -->
+        <div class="card app-card mb-3">
+          <div class="card-header bg-transparent py-3">
+            <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+              <i class="bi bi-journal-check"></i> Cheque details
+            </h3>
+          </div>
+          <div class="card-body p-3 p-md-4">
+            <div class="row g-3">
+              <div class="col-12 col-md-4">
+                <label for="chequeNumber" class="form-label">Cheque number <span class="text-danger">*</span></label>
+                <input type="text" class="form-control font-monospace" id="chequeNumber" name="chequeNumber"
+                       value="<%= old('chequeNumber', '') %>" maxlength="50" required
+                       placeholder="e.g. 889901">
+              </div>
+
+              <div class="col-12 col-md-4">
+                <label for="bankName" class="form-label">Bank name <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="bankName" name="bankName"
+                       value="<%= old('bankName', '') %>" maxlength="100" required
+                       placeholder="e.g. Meezan Bank">
+              </div>
+
+              <div class="col-12 col-md-4">
+                <label for="branch" class="form-label">Branch</label>
+                <input type="text" class="form-control" id="branch" name="branch"
+                       value="<%= old('branch', '') %>" maxlength="100"
+                       placeholder="e.g. DHA Phase 5">
+              </div>
+
+              <div class="col-12 col-md-4">
+                <label for="amount" class="form-label">Amount (PKR) <span class="text-danger">*</span></label>
+                <input type="text" inputmode="decimal" class="form-control fw-bold text-success"
+                       id="amount" name="amount" value="<%= old('amount', '') %>" required
+                       placeholder="1,050,000">
+              </div>
+
+              <div class="col-12 col-md-4">
+                <label for="chequeDate" class="form-label">Cheque date <span class="text-danger">*</span></label>
+                <input type="date" class="form-control" id="chequeDate" name="chequeDate"
+                       value="<%= old('chequeDate', today) %>" required>
+                <div class="form-text">Maturity / post-dated date on the cheque.</div>
+              </div>
+
+              <div class="col-12 col-md-4">
+                <label for="status" class="form-label">Vault status</label>
+                <select class="form-select" id="status" name="status">
+                  <% installments.CHEQUE_STATUSES.forEach(function (st) { %>
+                    <option value="<%= st %>" <%= old('status', 'held') === st ? 'selected' : '' %>>
+                      <%= installments.CHEQUE_STATUS_LABELS[st] || st %>
+                    </option>
+                  <% }); %>
+                </select>
+              </div>
+
+              <div class="col-12">
+                <label for="notes" class="form-label">Notes</label>
+                <textarea class="form-control" id="notes" name="notes" rows="3" maxlength="1000"
+                          placeholder="Purpose, bank reference, receiving officer, remarks…"><%= old('notes', '') %></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 mb-4">
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check2-circle me-1"></i>Add cheque to vault
+          </button>
+          <a href="/installments/cheques" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </div>
+
+      <div class="col-12 col-xl-4">
+        <div class="card app-card mb-3">
+          <div class="card-header bg-transparent py-3">
+            <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+              <i class="bi bi-clipboard-check"></i> Payment summary
+            </h3>
+          </div>
+          <div class="card-body small">
+            <dl class="row mb-0">
+              <dt class="col-5 text-muted fw-normal">Customer</dt>
+              <dd class="col-7 fw-semibold">
+                <span x-text="selectedCustomer ? selectedCustomer.name : 'Not selected'"></span>
+                <div class="text-muted fw-normal" x-show="selectedCustomer"
+                     x-text="selectedCustomer ? [selectedCustomer.phone, selectedCustomer.city].filter(Boolean).join(' · ') : ''"></div>
+              </dd>
+
+              <dt class="col-5 text-muted fw-normal">Project</dt>
+              <dd class="col-7">
+                <span x-text="selectedSale ? (selectedSale.projectTitle || selectedSale.saleNumber) : 'General payment'"></span>
+                <div class="text-muted" x-show="selectedSale"
+                     x-text="selectedSale ? saleMeta(selectedSale) : ''"></div>
+              </dd>
+
+              <dt class="col-5 text-muted fw-normal">POS order</dt>
+              <dd class="col-7" x-text="selectedPosSale ? selectedPosSale.number : '—'"></dd>
+
+              <dt class="col-5 text-muted fw-normal">Installment plan</dt>
+              <dd class="col-7" x-text="selectedPlan ? selectedPlan.planNumber : '—'"></dd>
+            </dl>
+
+            <hr>
+
+            <div x-show="selectedSale">
+              <div class="d-flex justify-content-between">
+                <span class="text-muted">Contract value</span>
+                <span class="fw-semibold" x-text="selectedSale ? formatPKR(selectedSale.amountPaisa) : ''"></span>
+              </div>
+            </div>
+            <div class="d-flex justify-content-between mt-1" x-show="selectedPosSale">
+              <span class="text-muted">Order total</span>
+              <span class="fw-semibold" x-text="selectedPosSale ? formatPKR(selectedPosSale.totalPaisa) : ''"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card app-card">
+          <div class="card-header bg-transparent py-3">
+            <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+              <i class="bi bi-lightbulb"></i> How it works
+            </h3>
+          </div>
+          <div class="card-body small text-muted">
+            <ul class="mb-0 ps-3">
+              <li class="mb-2">The cheque starts in the vault as <strong>Held</strong> unless you choose another status.</li>
+              <li class="mb-2">Link a project to record exactly which solar system the customer is paying for.</li>
+              <li class="mb-2">Link an installment plan to track which scheduled payment the cheque covers.</li>
+              <li class="mb-0">Deposit, clearance and bounce actions stay available from the register.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+<style>
+  [x-cloak] { display: none !important; }
+</style>
+
+<script>
+  function chequeForm(data) {
+    return {
+      customersList: data.customers || [],
+      salesList: data.sales || [],
+      posSalesList: data.posSales || [],
+      plansList: data.plans || [],
+      initial: data.initial || {},
+
+      customer: data.initial && data.initial.customer ? String(data.initial.customer) : '',
+      saleId: data.initial && data.initial.sale ? String(data.initial.sale) : '',
+      posSaleId: data.initial && data.initial.posSale ? String(data.initial.posSale) : '',
+      planId: data.initial && data.initial.plan ? String(data.initial.plan) : '',
+
+      init() {
+        // A preselected plan implies its customer and, when consistent, its sale.
+        if (this.selectedPlan) {
+          this.onPlanChange();
+        }
+        var sale = this.selectedSale;
+        if (sale && sale.customer) this.customer = String(sale.customer._id || sale.customer);
+      },
+
+      get selectedCustomer() {
+        var id = String(this.customer || '');
+        return this.customersList.find((row) => String(row._id) === id) || null;
+      },
+
+      get selectedSale() {
+        var id = String(this.saleId || '');
+        return this.salesList.find((row) => String(row._id) === id) || null;
+      },
+
+      get selectedPosSale() {
+        var id = String(this.posSaleId || '');
+        return this.posSalesList.find((row) => String(row._id) === id) || null;
+      },
+
+      get selectedPlan() {
+        var id = String(this.planId || '');
+        return this.plansList.find((row) => String(row._id) === id) || null;
+      },
+
+      get filteredPlans() {
+        var customerId = String(this.customer || '');
+        var saleId = String(this.saleId || '');
+        return this.plansList.filter((plan) => {
+          if (customerId && String(plan.customer) !== customerId) return false;
+          if (saleId && (!plan.sale || String(plan.sale._id || plan.sale) !== saleId)) return false;
+          return true;
+        });
+      },
+
+      onCustomerChange() {
+        var sale = this.selectedSale;
+        if (sale && sale.customer && String(sale.customer._id || sale.customer) !== String(this.customer)) {
+          this.saleId = '';
+        }
+        var posSale = this.selectedPosSale;
+        if (posSale && posSale.customer && String(posSale.customer._id || posSale.customer) !== String(this.customer)) {
+          this.posSaleId = '';
+        }
+        var plan = this.selectedPlan;
+        if (plan && String(plan.customer) !== String(this.customer)) {
+          this.planId = '';
+        }
+      },
+
+      onSaleChange() {
+        var sale = this.selectedSale;
+        if (sale && sale.customer) {
+          this.customer = String(sale.customer._id || sale.customer);
+        }
+        var plan = this.selectedPlan;
+        if (plan && this.saleId && String(plan.sale ? (plan.sale._id || plan.sale) : '') !== String(this.saleId)) {
+          this.planId = '';
+        }
+      },
+
+      onPosSaleChange() {
+        var posSale = this.selectedPosSale;
+        if (posSale && posSale.customer) {
+          this.customer = String(posSale.customer._id || posSale.customer);
+        }
+      },
+
+      onPlanChange() {
+        var plan = this.selectedPlan;
+        if (!plan) return;
+        this.customer = String(plan.customer);
+
+        // Mirror the plan's project only when it belongs to the same customer.
+        // Legacy data can pair a plan with another customer's sale.
+        if (plan.sale) {
+          var planSaleId = String(plan.sale._id || plan.sale);
+          var planSale = this.salesList.find((row) => String(row._id) === planSaleId);
+          var sameCustomer =
+            !planSale ||
+            !planSale.customer ||
+            String(planSale.customer._id || planSale.customer) === String(plan.customer);
+          this.saleId = sameCustomer ? planSaleId : '';
+        }
+      },
+
+      planLabel(plan) {
+        var title = plan.sale ? (plan.sale.projectTitle || plan.sale.saleNumber) : 'Installment plan';
+        return plan.planNumber + ' — ' + title + ' (' + plan.status + ')';
+      },
+
+      systemLabel(sale) {
+        if (!sale || !sale.systemSummary) return 'Solar';
+        var labels = {
+          on_grid: 'On-grid',
+          off_grid: 'Off-grid',
+          hybrid: 'Hybrid'
+        };
+        return labels[sale.systemSummary.systemType] || 'Solar';
+      },
+
+      saleMeta(sale) {
+        if (!sale) return '';
+        var capKw = Number(sale.systemSummary ? sale.systemSummary.capacityKw : 0) || 0;
+        return (
+          sale.saleNumber +
+          (capKw > 0 ? ' · ' + this.formatQty(capKw) + ' kW' : '') +
+          ' ' +
+          this.systemLabel(sale)
+        );
+      },
+
+      formatPKR(paisa) {
+        var rupees = Number(paisa || 0) / 100;
+        return 'Rs ' + rupees.toLocaleString('en-PK', { maximumFractionDigits: 0 });
+      },
+
+      formatQty(value) {
+        var number = Number(value || 0);
+        return Number.isInteger(number) ? String(number) : number.toFixed(2).replace(/\.?0+$/, '');
+      }
+    };
+  }
+</script>

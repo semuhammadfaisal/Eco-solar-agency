@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#073F68">
+  <meta name="csrf-token" content="<%= csrfToken %>">
+  <title><%= typeof title !== 'undefined' && title ? title + ' · ' : '' %><%= appName %></title>
+
+  <link href="/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+  <link href="/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/app.css" rel="stylesheet">
+  <% (pageStyles || []).forEach(function (href) { %>
+    <link href="<%= href %>" rel="stylesheet">
+  <% }); %>
+</head>
+<body class="app-body">
+<div class="app-page-loader" aria-hidden="true"></div>
+<script>
+  // Apply the saved sidebar state before paint to avoid a layout jump.
+  try {
+    if (window.localStorage.getItem('sidebarCollapsed') === '1') {
+      document.body.classList.add('sidebar-collapsed');
+    }
+  } catch (err) { /* storage disabled */ }
+</script>
+
+<div class="app-shell">
+
+  <!-- ================= Sidebar ================= -->
+  <aside class="app-sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="appSidebar" aria-labelledby="appSidebarLabel">
+    <div class="offcanvas-header sidebar-mobile-header">
+      <span class="fw-semibold" id="appSidebarLabel">Menu</span>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#appSidebar" aria-label="Close"></button>
+    </div>
+
+    <div class="offcanvas-body p-0">
+      <div class="sidebar-surface d-flex flex-column">
+
+        <a class="sidebar-brand" href="/dashboard">
+          <% if (settings.logoPath) { %>
+            <img src="<%= settings.logoPath %>" alt="<%= appName %>" class="sidebar-brand-logo">
+          <% } else { %>
+            <span class="sidebar-brand-icon"><i class="bi bi-sun-fill"></i></span>
+          <% } %>
+          <span class="sidebar-brand-text">
+            <span class="d-block text-truncate"><%= appName %></span>
+            <small><span class="sidebar-status-dot"></span><%= branchSession ? (currentUser.branchCode + ' branch workspace') : 'Operations workspace' %></small>
+          </span>
+        </a>
+
+        <nav class="sidebar-nav flex-grow-1" aria-label="Main navigation">
+          <% navigation.forEach(function (group) {
+               var visibleItems = group.items.filter(function (item) { return hasRole(item.roles); });
+               if (!visibleItems.length) return;
+               var groupActive = visibleItems.some(function (item) {
+                 return currentPath === item.url || (item.match && currentPath.indexOf(item.match) === 0);
+               }); %>
+            <div class="sidebar-group<%= groupActive ? ' has-active' : '' %>">
+              <div class="sidebar-heading">
+                <span class="sidebar-heading-text"><%= group.label %></span>
+              </div>
+              <ul class="nav flex-column sidebar-group-panel">
+                <% visibleItems.forEach(function (item) {
+                     var isActive = currentPath === item.url || (item.match && currentPath.indexOf(item.match) === 0); %>
+                  <li class="nav-item">
+                    <a class="nav-link<%= isActive ? ' active' : '' %>" href="<%= item.url %>" title="<%= item.label %>"<%= isActive ? ' aria-current="page"' : '' %>>
+                      <span class="sidebar-nav-icon"><i class="bi <%= item.icon %>"></i></span>
+                      <span class="sidebar-link-text"><%= item.label %></span>
+                      <i class="bi bi-chevron-right sidebar-link-arrow" aria-hidden="true"></i>
+                    </a>
+                  </li>
+                <% }); %>
+              </ul>
+            </div>
+          <% }); %>
+        </nav>
+
+        <div class="sidebar-footer">
+          <% if (currentUser && branchSession) { %>
+            <div class="sidebar-user">
+              <span class="sidebar-user-avatar"><%= currentUser.initials %></span>
+              <span class="sidebar-user-copy">
+                <strong class="text-truncate"><%= currentUser.name %></strong>
+                <small class="text-truncate">Branch login · <%= currentUser.branchCode %></small>
+              </span>
+            </div>
+          <% } else if (currentUser) { %>
+            <a href="/profile" class="sidebar-user" title="Open profile settings">
+              <span class="sidebar-user-avatar"><%= currentUser.initials %></span>
+              <span class="sidebar-user-copy">
+                <strong class="text-truncate"><%= currentUser.name %></strong>
+                <small class="text-truncate"><%= currentUser.roleLabel %></small>
+              </span>
+              <i class="bi bi-gear sidebar-user-action" aria-hidden="true"></i>
+            </a>
+          <% } %>
+          <div class="sidebar-version">
+            <span>Solar Agency</span>
+            <span>v<%= appVersion %></span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </aside>
+
+  <!-- ================= Main column ================= -->
+  <div class="app-main">
+
+    <header class="app-topbar">
+      <div class="topbar-leading">
+      <button class="topbar-icon-button d-lg-none" type="button"
+              data-bs-toggle="offcanvas" data-bs-target="#appSidebar" aria-controls="appSidebar" aria-label="Open menu">
+        <i class="bi bi-list"></i>
+      </button>
+
+      <button class="topbar-icon-button d-none d-lg-inline-flex" type="button" id="sidebarToggle"
+              aria-label="Collapse sidebar" title="Collapse sidebar">
+        <i class="bi bi-layout-sidebar-inset"></i>
+      </button>
+
+      <div class="topbar-page-context">
+        <span class="topbar-eyebrow"><i class="bi bi-sun-fill"></i> <%= branchSession ? 'Branch workspace' : 'Solar Agency workspace' %></span>
+        <strong><%= typeof title !== 'undefined' && title ? title : 'Dashboard' %></strong>
+      </div>
+      </div>
+
+      <div class="topbar-actions">
+        <% if (currentUser && !branchSession) { %>
+          <form method="GET" action="/lookup" class="d-none d-xl-flex" role="search">
+            <div class="input-group input-group-sm" style="width: 290px;">
+              <span class="input-group-text bg-white"><i class="bi bi-upc-scan"></i></span>
+              <input name="q" class="form-control" aria-label="Find business record by number"
+                     placeholder="Find customer, invoice, quote, receipt…">
+            </div>
+          </form>
+          <a href="/lookup" class="topbar-icon-button d-xl-none" title="Find by number" aria-label="Find business record by number">
+            <i class="bi bi-search"></i>
+          </a>
+        <% } %>
+        <span class="topbar-date d-none d-md-inline-flex">
+          <span class="topbar-date-icon"><i class="bi bi-calendar3"></i></span>
+          <span><small>Today</small><strong><%= formatDate(new Date()) %></strong></span>
+        </span>
+
+        <!-- Notification Bell Dropdown -->
+        <% if (!branchSession) { %>
+        <div class="dropdown">
+          <button class="topbar-icon-button position-relative" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Notifications" aria-label="Notifications">
+            <i class="bi bi-bell"></i>
+            <% if (unreadNotificationsCount > 0) { %>
+              <span class="topbar-notification-badge">
+                <%= unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount %>
+              </span>
+            <% } %>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end topbar-dropdown topbar-notifications">
+            <li class="dropdown-header d-flex justify-content-between align-items-center py-2 px-3">
+              <span class="fw-semibold">Notifications</span>
+              <% if (unreadNotificationsCount > 0) { %>
+                <form method="POST" action="/recovery/notifications/mark-all-read" class="d-inline m-0">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <button type="submit" class="btn btn-link btn-sm p-0 text-decoration-none" style="font-size:0.75rem;">Mark all read</button>
+                </form>
+              <% } %>
+            </li>
+            <li><hr class="dropdown-divider my-0"></li>
+            <% if (unreadNotifications && unreadNotifications.length) { %>
+              <% unreadNotifications.forEach(function(n) { %>
+                <li>
+                  <a class="dropdown-item py-2 px-3 text-wrap border-bottom" href="<%= n.link || '#' %>">
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                      <span class="fw-semibold small text-primary"><%= n.title %></span>
+                      <span class="text-muted" style="font-size: 0.7rem;"><%= formatRelative(n.createdAt) %></span>
+                    </div>
+                    <div class="text-muted small lh-sm"><%= n.message %></div>
+                  </a>
+                </li>
+              <% }); %>
+            <% } else { %>
+              <li class="px-3 py-3 text-muted text-center small">No unread notifications</li>
+            <% } %>
+          </ul>
+        </div>
+        <% } %>
+
+        <% if (branchSession) { %>
+          <span class="topbar-date d-none d-md-inline-flex">
+            <span class="topbar-date-icon"><i class="bi bi-shop"></i></span>
+            <span><small>Branch</small><strong><%= currentUser.branchCode %></strong></span>
+          </span>
+          <form method="POST" action="/logout" class="m-0">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button type="submit" class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-box-arrow-right me-1"></i>Sign out
+            </button>
+          </form>
+        <% } else { %>
+        <div class="dropdown">
+          <button class="topbar-profile-button dropdown-toggle" type="button"
+                  data-bs-toggle="dropdown" aria-expanded="false">
+            <span class="avatar avatar-sm topbar-avatar"><%= currentUser ? currentUser.initials : '?' %></span>
+            <span class="topbar-profile-copy d-none d-sm-flex">
+              <strong><%= currentUser ? currentUser.name : 'Guest' %></strong>
+              <small><%= currentUser ? currentUser.roleLabel : '' %></small>
+            </span>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end topbar-dropdown topbar-user-menu">
+            <li>
+              <div class="topbar-user-summary">
+                <span class="avatar"><%= currentUser ? currentUser.initials : '?' %></span>
+                <span>
+                  <strong><%= currentUser ? currentUser.name : '' %></strong>
+                  <small class="text-truncate"><%= currentUser ? currentUser.email : '' %></small>
+                </span>
+              </div>
+            </li>
+            <li><hr class="dropdown-divider"></li>
+            <li>
+              <a class="dropdown-item" href="/profile">
+                <i class="bi bi-person-gear me-2"></i>Profile settings
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item" href="/change-password">
+                <i class="bi bi-key me-2"></i>Change password
+              </a>
+            </li>
+            <li><hr class="dropdown-divider"></li>
+            <li>
+              <form method="POST" action="/logout">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button type="submit" class="dropdown-item text-danger">
+                  <i class="bi bi-box-arrow-right me-2"></i>Sign out
+                </button>
+              </form>
+            </li>
+          </ul>
+        </div>
+        <% } %>
+      </div>
+    </header>
+
+    <main class="app-content">
+      <%- include('../partials/breadcrumbs') %>
+      <%- include('../partials/flash') %>
+      <%- body %>
+    </main>
+
+    <footer class="app-footer">
+      <span>&copy; <%= year %> <%= settings.companyName || appName %>. All rights reserved.</span>
+      <span class="d-none d-sm-inline text-muted">Solar Business Management System</span>
+    </footer>
+
+  </div>
+</div>
+
+<%- include('../partials/delete-modal') %>
+<%- include('../partials/closing-reminder') %>
+
+<script src="/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+<script defer src="/vendor/alpine/cdn.min.js"></script>
+<script src="/js/app.js"></script>
+<% (pageScripts || []).forEach(function (src) { %>
+  <script src="<%= src %>"></script>
+<% }); %>
+</body>
+</html>

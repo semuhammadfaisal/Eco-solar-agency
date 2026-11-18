@@ -1,0 +1,147 @@
+<%- include('../partials/page-header', {
+  heading: 'Supplier Payments & AP Settlement',
+  subheading: 'Disburse payments to solar panel, inverter, and battery suppliers against outstanding bills and purchase orders.',
+  actions: [
+    { label: 'Payables Ledger', url: '/accounting/payables', icon: 'bi-arrow-up-right-circle', class: 'btn-outline-dark' },
+    { label: 'Purchases', url: '/purchases', icon: 'bi-receipt', class: 'btn-outline-secondary' }
+  ]
+}) %>
+
+<div class="row g-4">
+  <!-- Left Column: Payment Form -->
+  <div class="col-12 col-lg-5">
+    <div class="card app-card shadow-sm sticky-top" style="top: 80px;">
+      <div class="card-header bg-primary text-white py-3">
+        <h2 class="h6 fw-bold mb-0"><i class="bi bi-credit-card-2-front me-2"></i>Record Supplier Payment</h2>
+      </div>
+      <div class="card-body p-4">
+        <form method="POST" action="/accounting/supplier-payments">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Supplier / Vendor <span class="text-danger">*</span></label>
+            <select name="supplierId" class="form-select" required>
+              <option value="">Select Supplier...</option>
+              <% suppliers.forEach(function(s) { %>
+                <option value="<%= s._id %>"><%= s.name %> (<%= s.code || 'Vendor' %>)</option>
+              <% }); %>
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Payment Source <span class="text-danger">*</span></label>
+            <select name="paymentAccountCode" class="form-select" required>
+              <% paymentAccounts.forEach(function(acc) { %>
+                <option value="<%= acc.code %>" <%= acc.code === '1020' ? 'selected' : '' %>>
+                  <%= acc.code %> - <%= acc.name %>
+                </option>
+              <% }); %>
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Amount to Pay (PKR) <span class="text-danger">*</span></label>
+            <input type="text" name="amount" class="form-control" placeholder="e.g. 250,000" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Cheque / Bank Reference #</label>
+            <input type="text" name="reference" class="form-control" placeholder="Cheque # / Online IBFT Transaction ID" maxlength="100">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Notes</label>
+            <textarea name="notes" class="form-control" rows="2" placeholder="Settlement for PO-2026-0012, etc." maxlength="500"></textarea>
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">
+            <i class="bi bi-check2-circle me-1"></i>Post Supplier Payment
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Column: Outstanding Balances & Recent Disbursements -->
+  <div class="col-12 col-lg-7">
+    <!-- Outstanding Payables Summary -->
+    <div class="card app-card shadow-sm mb-4">
+      <div class="card-header bg-body-tertiary py-3 d-flex justify-content-between align-items-center">
+        <h2 class="h6 fw-bold mb-0"><i class="bi bi-hourglass-split me-2"></i>Outstanding Vendor Balances</h2>
+        <span class="badge text-bg-warning-subtle text-warning-emphasis fw-bold">
+          Total: <%= formatPKR(payablesList.totalPayablePaisa) %>
+        </span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 app-table">
+          <thead class="table-light">
+            <tr>
+              <th>Supplier</th>
+              <th>Orders</th>
+              <th class="text-end">Total Billed</th>
+              <th class="text-end">Balance Due</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (payablesList.rows && payablesList.rows.length) { %>
+              <% payablesList.rows.slice(0, 6).forEach(function(row) { %>
+                <tr>
+                  <td>
+                    <div class="fw-bold text-dark"><%= row.supplier ? row.supplier.name : 'Supplier' %></div>
+                    <div class="small text-muted"><%= row.supplier ? row.supplier.phone : '' %></div>
+                  </td>
+                  <td><%= row.ordersCount %></td>
+                  <td class="text-end text-muted"><%= formatPKR(row.totalPurchasesPaisa) %></td>
+                  <td class="text-end fw-bold text-danger"><%= formatPKR(row.balanceDuePaisa) %></td>
+                </tr>
+              <% }); %>
+            <% } else { %>
+              <tr>
+                <td colspan="4" class="text-center py-4 text-muted">
+                  All supplier bills are completely settled.
+                </td>
+              </tr>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Recent Supplier Payment Journal Entries -->
+    <div class="card app-card shadow-sm">
+      <div class="card-header bg-body-tertiary py-3">
+        <h2 class="h6 fw-bold mb-0"><i class="bi bi-journal-text me-2"></i>Recent Supplier Payment Vouchers</h2>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 app-table">
+          <thead class="table-light">
+            <tr>
+              <th>JV #</th>
+              <th>Date</th>
+              <th>Memo</th>
+              <th class="text-end">Amount (PKR)</th>
+              <th>Disbursed By</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (recentEntries && recentEntries.length) { %>
+              <% recentEntries.forEach(function(jv) { %>
+                <tr>
+                  <td class="font-monospace fw-bold text-dark"><%= jv.entryNumber %></td>
+                  <td><%= formatDate(jv.date) %></td>
+                  <td><div class="small text-truncate" style="max-width: 250px;"><%= jv.memo %></div></td>
+                  <td class="text-end fw-bold text-primary"><%= formatPKR(jv.totalDebitPaisa) %></td>
+                  <td class="small text-muted"><%= jv.createdBy ? jv.createdBy.name : 'System' %></td>
+                </tr>
+              <% }); %>
+            <% } else { %>
+              <tr>
+                <td colspan="5" class="text-center py-4 text-muted">No supplier payments recorded yet.</td>
+              </tr>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,131 @@
+<%
+  var headerActions = [];
+  if (can('attendance.view')) {
+    headerActions.push({ label: 'Daily attendance', url: '/employees/attendance', icon: 'bi-calendar-check', class: 'btn-outline-secondary' });
+    headerActions.push({ label: 'Monthly summary', url: '/employees/attendance/summary', icon: 'bi-bar-chart', class: 'btn-outline-secondary' });
+  }
+  if (can('employees.manage')) {
+    headerActions.push({ label: 'Add employee', url: '/employees/new', icon: 'bi-person-plus', class: 'btn-primary' });
+  }
+%>
+
+<%- include('../partials/page-header', {
+  heading: 'Employees',
+  subheading: 'Employee profiles linked to staff accounts, salaries and attendance.',
+  actions: headerActions
+}) %>
+
+<div class="card app-card mt-3">
+  <div class="card-body border-bottom">
+    <form method="GET" action="/employees" class="row g-2 align-items-end">
+      <div class="col-12 col-md-5">
+        <label for="search" class="form-label small text-muted mb-1">Search</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="search" class="form-control" id="search" name="search"
+                 value="<%= filters.search %>" placeholder="Name, email, designation or CNIC">
+        </div>
+      </div>
+
+      <div class="col-6 col-md-3">
+        <label for="status" class="form-label small text-muted mb-1">Status</label>
+        <select class="form-select" id="status" name="status">
+          <option value="">All statuses</option>
+          <% crm.EMPLOYEE_STATUSES.forEach(function (status) { %>
+            <option value="<%= status %>"<%= filters.status === status ? ' selected' : '' %>><%= crm.EMPLOYEE_STATUS_LABELS[status] %></option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div class="col-6 col-md-2">
+        <label for="designation" class="form-label small text-muted mb-1">Designation</label>
+        <select class="form-select" id="designation" name="designation">
+          <option value="">All</option>
+          <% designations.forEach(function (designation) { %>
+            <option value="<%= designation %>"<%= filters.designation === designation ? ' selected' : '' %>><%= designation %></option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div class="col-12 col-md-2 d-flex gap-2">
+        <button type="submit" class="btn btn-primary flex-grow-1"><i class="bi bi-funnel me-1"></i>Filter</button>
+        <a href="/employees" class="btn btn-outline-secondary">Reset</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+    <span class="small text-muted">
+      <strong><%= total %></strong> employee<%= total === 1 ? '' : 's' %> found
+    </span>
+    <% if (filters.search || filters.status || filters.designation) { %>
+      <span class="badge text-bg-light border">Filtered</span>
+    <% } %>
+  </div>
+
+  <%
+    var rows = employees.map(function (employee) {
+      var user = employee.user;
+      var name = user ? user.name : 'Unknown staff account';
+      var email = user ? user.email : '';
+      var phone = user ? user.phone : '';
+      var statusBadge = crm.EMPLOYEE_STATUS_BADGES[employee.status] || 'secondary';
+      var commission = Number((employee.commissionRateBps / 100).toFixed(2));
+      var actions = '';
+
+      if (can('employees.manage')) {
+        actions =
+          '<a class="btn btn-sm btn-outline-secondary" href="/employees/' + employee._id + '/edit" title="Edit employee">' +
+            '<i class="bi bi-pencil"></i>' +
+          '</a>' +
+          '<button type="button" class="btn btn-sm btn-outline-danger" title="Delete employee"' +
+            ' data-delete-url="/employees/' + employee._id + '"' +
+            ' data-delete-name="' + escapeHtml(name) + '">' +
+            '<i class="bi bi-trash"></i>' +
+          '</button>';
+      }
+
+      return {
+        cells: [
+          { html:
+            '<div class="d-flex align-items-center gap-2">' +
+              '<span class="avatar avatar-sm">' + escapeHtml(initials(name)) + '</span>' +
+              '<div class="min-w-0">' +
+                '<div class="fw-semibold text-truncate">' + escapeHtml(name) + '</div>' +
+                '<div class="text-muted small text-truncate">' + escapeHtml(email) + '</div>' +
+              '</div>' +
+            '</div>'
+          },
+          { html: '<div class="small">' + escapeHtml(employee.designation) + '</div>' },
+          { html:
+            '<div class="small">' + escapeHtml(phone || '—') +
+              (employee.cnic ? '<div class="text-muted font-monospace">' + escapeHtml(employee.cnic) + '</div>' : '') +
+            '</div>'
+          },
+          { html: '<span class="small">' + formatPKR(employee.salaryPaisa, { decimals: 2 }) + '</span>' },
+          { html: '<span class="small text-muted">' + commission + '%</span>' },
+          { html: '<span class="small text-muted">' + formatDate(employee.joiningDate) + '</span>' },
+          { html: '<span class="badge text-bg-' + statusBadge + '">' + escapeHtml(crm.EMPLOYEE_STATUS_LABELS[employee.status] || employee.status) + '</span>' },
+          { class: 'text-end', html: '<div class="d-flex justify-content-end gap-1">' + actions + '</div>' }
+        ]
+      };
+    });
+  %>
+
+  <%- include('../partials/table', {
+    columns: [
+      { label: 'Employee' },
+      { label: 'Designation' },
+      { label: 'Contact' },
+      { label: 'Salary' },
+      { label: 'Commission' },
+      { label: 'Joined' },
+      { label: 'Status' },
+      { label: '', class: 'text-end', width: '110px' }
+    ],
+    rows: rows,
+    empty: 'No employees match your filters.'
+  }) %>
+
+  <%- include('../partials/pagination', { pagination: pagination }) %>
+</div>

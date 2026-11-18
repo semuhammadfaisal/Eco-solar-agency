@@ -1,0 +1,228 @@
+<%
+  var selectedItemId = String(old('item', isEdit && serial && serial.item ? serial.item._id : (selectedItemId || '')));
+  var selectedSupplierId = String(old('supplier', isEdit && serial && serial.supplier ? serial.supplier._id : ''));
+  var serialValue = old('serial', isEdit && serial ? serial.serial : '');
+  var barcodeValue = old('barcode', isEdit && serial ? (serial.barcode || '') : '');
+  var locationValue = old('location', isEdit && serial ? (serial.location || '') : '');
+  var notesValue = old('notes', isEdit && serial ? (serial.notes || '') : '');
+  var addToStock = String(old('addToStock', '')) !== '';
+  var selectedBranch = String(old('branch', branchId || ''));
+  var groups = inventory.ITEM_CATEGORIES.map(function (key) {
+    return {
+      key: key,
+      label: inventory.ITEM_CATEGORY_LABELS[key],
+      items: items.filter(function (item) { return item.category === key; })
+    };
+  }).filter(function (group) { return group.items.length; });
+
+  var headerActions = [];
+  if (isEdit && serial) {
+    headerActions.push({ label: 'Back to serial', url: '/serials/' + serial._id, icon: 'bi-arrow-left', class: 'btn-outline-secondary' });
+  }
+  headerActions.push({ label: 'All serial numbers', url: '/serials', icon: 'bi-upc-scan', class: 'btn-outline-secondary' });
+%>
+
+<%- include('../partials/page-header', {
+  heading: isEdit ? 'Edit serial' : 'Register serials',
+  subheading: isEdit
+    ? 'Correct the serial number, barcode or setup details for this unit.'
+    : 'Add serial numbers and barcodes to any product. Optionally receive the units into a branch at the same time.',
+  actions: headerActions
+}) %>
+
+<div class="row g-3 g-lg-4 mt-1">
+  <div class="col-12 col-xl-8">
+    <div class="card app-card">
+      <div class="card-body p-4">
+        <%- include('../partials/form-errors') %>
+
+        <form method="POST" action="<%= formAction %>" <%= isEdit ? '' : 'data-serial-register-form' %> data-once novalidate>
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+          <div class="mb-3">
+            <label for="item" class="form-label">Product <span class="text-danger">*</span></label>
+            <select class="form-select" id="item" name="item" required data-serial-item>
+              <option value="">Select a product…</option>
+              <% groups.forEach(function (group) { %>
+                <optgroup label="<%= group.label %>">
+                  <% group.items.forEach(function (item) { %>
+                    <option value="<%= item._id %>"
+                            data-stock="<%= item.currentStock %>"
+                            data-unit="<%= item.unit %>"
+                            data-sku="<%= item.sku %>"
+                            data-has-serial="<%= item.hasSerial ? '1' : '0' %>"
+                            <%= selectedItemId === String(item._id) ? 'selected' : '' %>>
+                      <%= item.sku %> — <%= item.name %> (<%= formatQty(item.currentStock) %> <%= item.unit %> on hand)
+                    </option>
+                  <% }); %>
+                </optgroup>
+              <% }); %>
+            </select>
+            <div class="form-text" data-serial-item-hint>
+              Pick any product, whether or not it is already serial-tracked. Registering a serial marks the product as serial-tracked.
+            </div>
+          </div>
+
+          <% if (!isEdit) { %>
+            <div class="mb-3">
+              <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-1">
+                <label for="serials" class="form-label mb-0">Serial numbers and barcodes <span class="text-danger">*</span></label>
+                <span class="badge text-bg-light border" data-serial-count-for="register">0 entered</span>
+              </div>
+              <textarea class="form-control font-monospace" id="serials" name="serials" rows="7"
+                        data-serial-input data-serial-expected="register" required
+                        placeholder="SN-0001,8901234567890&#10;SN-0002,8901234567891&#10;SN-0003"><%= old('serials') %></textarea>
+              <div class="form-text">
+                One unit per line: <span class="font-monospace">SERIAL</span> or <span class="font-monospace">SERIAL,BARCODE</span>.
+                The barcode column is optional. Duplicate serials or barcodes are rejected.
+              </div>
+              <div class="mt-2">
+                <label for="serialFile" class="form-label small text-muted mb-1">Import a CSV / text file</label>
+                <input type="file" class="form-control form-control-sm" id="serialFile"
+                       accept=".csv,.txt,text/csv,text/plain"
+                       data-serial-file data-serial-target="serials">
+              </div>
+            </div>
+
+            <div class="card bg-light-subtle border-0 mb-3">
+              <div class="card-body">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="addToStock" name="addToStock" value="1"
+                         data-serial-stock-toggle <%= addToStock ? 'checked' : '' %>>
+                  <label class="form-check-label fw-semibold" for="addToStock">
+                    Add these units to stock
+                  </label>
+                  <div class="form-text">
+                    Leave unticked when the stock balance is already recorded. Ticked creates an <strong>IN</strong> movement and increases the branch balance.
+                  </div>
+                </div>
+
+                <div class="row g-3 mt-1" data-serial-stock-fields <%= addToStock ? '' : 'hidden' %>>
+                  <div class="col-12 col-md-6">
+                    <label for="branch" class="form-label">Receive at branch</label>
+                    <select class="form-select" id="branch" name="branch">
+                      <% branches.forEach(function (branch) { %>
+                        <option value="<%= branch._id %>"<%= selectedBranch === String(branch._id) ? ' selected' : '' %>>
+                          <%= branch.code %> — <%= branch.name %>
+                        </option>
+                      <% }); %>
+                    </select>
+                  </div>
+
+                  <% if (canViewCosts) { %>
+                    <div class="col-12 col-md-6">
+                      <label for="unitCost" class="form-label">Unit cost (PKR)</label>
+                      <input type="text" class="form-control" id="unitCost" name="unitCost" inputmode="decimal"
+                             value="<%= old('unitCost') %>" placeholder="0.00">
+                      <div class="form-text">Optional. Updates the moving-average cost.</div>
+                    </div>
+                  <% } %>
+                </div>
+              </div>
+            </div>
+          <% } else { %>
+            <div class="row g-3">
+              <div class="col-12 col-md-6">
+                <label for="serial" class="form-label">Serial number <span class="text-danger">*</span></label>
+                <input type="text" class="form-control font-monospace" id="serial" name="serial"
+                       value="<%= serialValue %>" maxlength="60" required>
+                <div class="form-text">2–60 characters: letters, digits and . _ / -</div>
+              </div>
+
+              <div class="col-12 col-md-6">
+                <label for="barcode" class="form-label">Barcode / QR number</label>
+                <input type="text" class="form-control font-monospace" id="barcode" name="barcode"
+                       value="<%= barcodeValue %>" maxlength="80" placeholder="Optional">
+                <div class="form-text">Scannable label for this unit. Must be unique.</div>
+              </div>
+            </div>
+
+            <% if (serial) { %>
+              <div class="alert alert-light border small mt-3">
+                Current status:
+                <span class="badge text-bg-<%= inventory.SERIAL_STATUS_BADGES[serial.status] || 'secondary' %>">
+                  <%= inventory.SERIAL_STATUS_LABELS[serial.status] || serial.status %>
+                </span>
+                <% if (['in_stock', 'defective'].includes(serial.status)) { %>
+                  <div class="mt-1 text-muted">Move the unit out of stock on its detail page before changing its product.</div>
+                <% } %>
+              </div>
+            <% } %>
+          <% } %>
+
+          <div class="row g-3 mt-1">
+            <div class="col-12 col-md-6">
+              <label for="supplier" class="form-label">Supplier</label>
+              <select class="form-select" id="supplier" name="supplier">
+                <option value="">No supplier</option>
+                <% suppliers.forEach(function (supplier) { %>
+                  <option value="<%= supplier._id %>"<%= selectedSupplierId === String(supplier._id) ? ' selected' : '' %>>
+                    <%= supplier.name %><%= supplier.code ? ' — ' + supplier.code : '' %>
+                  </option>
+                <% }); %>
+              </select>
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label for="location" class="form-label">Location</label>
+              <input type="text" class="form-control" id="location" name="location"
+                     value="<%= locationValue %>" maxlength="100" placeholder="Warehouse shelf, branch, site…">
+            </div>
+          </div>
+
+          <div class="mt-3">
+            <label for="notes" class="form-label">Notes</label>
+            <textarea class="form-control" id="notes" name="notes" rows="2" maxlength="500"
+                      placeholder="Condition, invoice reference, opening stock…"><%= notesValue %></textarea>
+          </div>
+
+          <div class="alert alert-light border small mt-3" data-serial-register-preview>
+            <% if (isEdit) { %>
+              Changes to the serial or barcode are checked against every other unit.
+            <% } else { %>
+              Select a product and enter its serials to see the stock effect.
+            <% } %>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2 justify-content-end mt-4">
+            <a href="<%= isEdit && serial ? '/serials/' + serial._id : '/serials' %>" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-<%= isEdit ? 'check2' : 'upc-scan' %> me-1"></i><%= isEdit ? 'Save serial' : 'Register serials' %>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-4">
+    <div class="card app-card bg-light-subtle">
+      <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">How serial setup works</h2></div>
+      <div class="card-body small text-muted">
+        <ul class="ps-3 mb-3">
+          <li class="mb-2">Every serial belongs to one product. Registering one marks the product as serial-tracked.</li>
+          <li class="mb-2">A barcode is optional and must be unique across all live serials.</li>
+          <li class="mb-2">Use <strong>Add these units to stock</strong> when the units are not already in the balance.</li>
+          <li class="mb-0">Status changes still move individual units in and out of the warehouse.</li>
+        </ul>
+        <div class="alert alert-light border small mb-0 py-2">
+          <i class="bi bi-upc-scan me-1"></i>
+          Search by serial or barcode from the Serial numbers page. Opening a barcode URL also works.
+        </div>
+      </div>
+    </div>
+
+    <div class="card app-card mt-3">
+      <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">Status meaning</h2></div>
+      <div class="card-body small">
+        <div class="d-flex justify-content-between py-1"><span class="text-muted">In stock</span><span>On hand</span></div>
+        <div class="d-flex justify-content-between py-1"><span class="text-muted">Defective</span><span>On hand</span></div>
+        <div class="d-flex justify-content-between py-1"><span class="text-muted">Issued</span><span>Deployed</span></div>
+        <div class="d-flex justify-content-between py-1"><span class="text-muted">Installed</span><span>Deployed</span></div>
+        <div class="d-flex justify-content-between py-1"><span class="text-muted">Returned</span><span>Deployed / supplier</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/inventory.js"></script>

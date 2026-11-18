@@ -1,0 +1,190 @@
+<%- include('../partials/page-header', {
+  heading: 'Installment Plans & Financing',
+  subheading: 'Manage customer solar financing contracts, payment schedules, and recovery flags.',
+  actions: [
+    ...(canManage ? [{ label: 'New installment plan', url: '/installments/new', icon: 'bi-plus-lg', class: 'btn-primary' }] : []),
+    { label: 'Collection calendar', url: '/installments/calendar', icon: 'bi-calendar-event', class: 'btn-outline-primary' },
+    { label: 'Cheque vault', url: '/installments/cheques', icon: 'bi-journal-check', class: 'btn-outline-secondary' },
+    { label: 'Receipts', url: '/installments/receipts', icon: 'bi-receipt-cutoff', class: 'btn-outline-secondary' }
+  ]
+}) %>
+
+<!-- Portfolio Metrics Ribbon -->
+<div class="row g-2 mb-3 mt-1">
+  <div class="col-6 col-lg-3">
+    <div class="card app-card border-primary-subtle text-center p-3 h-100">
+      <div class="text-uppercase small text-muted fw-semibold">Financed Portfolio</div>
+      <div class="display-6 fw-bold text-dark"><%= formatPKR(metrics.totalFinancedPaisa) %></div>
+      <div class="small text-muted"><%= metrics.activePlans %> Active Plans (<%= metrics.totalPlans %> Total)</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card border-success-subtle text-center p-3 h-100">
+      <div class="text-uppercase small text-muted fw-semibold">Total Recovered</div>
+      <div class="display-6 fw-bold text-success"><%= formatPKR(metrics.totalPaidPaisa) %></div>
+      <div class="small text-muted">Receipts cleared</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card border-danger-subtle text-center p-3 h-100">
+      <div class="text-uppercase small text-muted fw-semibold">Receivable Balance</div>
+      <div class="display-6 fw-bold text-danger"><%= formatPKR(metrics.totalRemainingPaisa) %></div>
+      <div class="small text-muted">Outstanding capital + markup</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card border-warning-subtle text-center p-3 h-100">
+      <div class="text-uppercase small text-muted fw-semibold">Recovery Flagged</div>
+      <div class="display-6 fw-bold text-warning-emphasis"><%= metrics.recoveryPlans %></div>
+      <div class="small text-muted">Accounts under collection watch</div>
+    </div>
+  </div>
+</div>
+
+<!-- Search & Filters Toolbar -->
+<div class="card app-card mb-3">
+  <div class="card-body p-3">
+    <form method="GET" action="/installments" class="row g-2 align-items-center">
+      <div class="col-12 col-md-4">
+        <div class="input-group">
+          <span class="input-group-text bg-transparent text-muted"><i class="bi bi-search"></i></span>
+          <input type="text" class="form-control" name="search" value="<%= filters.search %>"
+                 placeholder="Search by plan # (e.g. IP-2026-0001) or notes…">
+        </div>
+      </div>
+
+      <div class="col-6 col-md-3">
+        <select class="form-select" name="status">
+          <option value="">All Statuses</option>
+          <% installments.PLAN_STATUSES.forEach(function (st) { %>
+            <option value="<%= st %>" <%= filters.status === st ? 'selected' : '' %>>
+              <%= installments.PLAN_STATUS_LABELS[st] || st %>
+            </option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div class="col-6 col-md-3">
+        <select class="form-select" name="assignedOfficer">
+          <option value="">All Collection Officers</option>
+          <% officers.forEach(function (off) { %>
+            <option value="<%= off._id %>" <%= filters.assignedOfficer === String(off._id) ? 'selected' : '' %>>
+              <%= off.name %> (<%= off.role %>)
+            </option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div class="col-12 col-md-2 d-flex gap-2">
+        <button type="submit" class="btn btn-primary flex-grow-1">
+          <i class="bi bi-funnel me-1"></i>Filter
+        </button>
+        <% if (filters.search || filters.status || filters.assignedOfficer || filters.isFlaggedForRecovery) { %>
+          <a href="/installments" class="btn btn-outline-secondary" title="Clear filters">
+            <i class="bi bi-x-lg"></i>
+          </a>
+        <% } %>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Installment Plans Table -->
+<div class="card app-card">
+  <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
+    <h3 class="h6 fw-bold mb-0 text-primary">
+      <i class="bi bi-calendar3-range me-1"></i>Installment Contracts (<%= total %>)
+    </h3>
+  </div>
+
+  <% if (!plans || !plans.length) { %>
+    <div class="card-body text-center py-5 text-muted">
+      <i class="bi bi-calendar3-range fs-1 d-block mb-2 text-muted"></i>
+      <h4 class="h6 fw-semibold text-dark">No installment plans found</h4>
+      <p class="small mb-3">Generate installment plans from confirmed project contracts to track monthly receivables.</p>
+      <% if (canManage) { %>
+        <a href="/installments/new" class="btn btn-sm btn-primary">
+          <i class="bi bi-plus-lg me-1"></i>Create First Plan
+        </a>
+      <% } %>
+    </div>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 app-table">
+        <thead class="table-light">
+          <tr>
+            <th>Plan #</th>
+            <th>Customer</th>
+            <th>Sale #</th>
+            <th>Duration</th>
+            <th class="text-end">Financed</th>
+            <th class="text-end">Total Payable</th>
+            <th class="text-end">Recovered</th>
+            <th class="text-end">Balance</th>
+            <th>Officer</th>
+            <th>Status</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% plans.forEach(function (plan) { %>
+            <tr class="<%= plan.isFlaggedForRecovery ? 'table-warning-subtle' : '' %>">
+              <td>
+                <a href="/installments/<%= plan._id %>" class="font-monospace fw-bold text-decoration-none">
+                  <%= plan.planNumber %>
+                </a>
+                <% if (plan.isFlaggedForRecovery) { %>
+                  <span class="badge text-bg-danger ms-1" style="font-size:0.65rem;">RECOVERY WATCH</span>
+                <% } %>
+              </td>
+              <td>
+                <% if (plan.customer) { %>
+                  <a href="/customers/<%= plan.customer._id %>" class="fw-semibold text-body">
+                    <%= plan.customer.name %>
+                  </a>
+                  <div class="text-muted small"><%= plan.customer.phone %> · <%= plan.customer.city || '—' %></div>
+                <% } else { %>
+                  <span class="text-muted">—</span>
+                <% } %>
+              </td>
+              <td>
+                <% if (plan.sale) { %>
+                  <a href="/projects/<%= plan.sale._id %>" class="font-monospace small">
+                    <%= plan.sale.saleNumber %>
+                  </a>
+                <% } else { %>
+                  <span class="text-muted">—</span>
+                <% } %>
+              </td>
+              <td class="small">
+                <span class="fw-bold"><%= plan.installmentCount %></span> × <%= installments.FREQUENCY_LABELS[plan.frequency] || plan.frequency %>
+              </td>
+              <td class="text-end font-monospace"><%= formatPKR(plan.financedAmountPaisa) %></td>
+              <td class="text-end font-monospace fw-bold text-dark"><%= formatPKR(plan.totalPayablePaisa) %></td>
+              <td class="text-end font-monospace text-success"><%= formatPKR(plan.totalPaidPaisa) %></td>
+              <td class="text-end font-monospace fw-bold text-danger"><%= formatPKR(plan.remainingBalancePaisa) %></td>
+              <td class="small text-muted"><%= plan.assignedOfficer ? plan.assignedOfficer.name : '—' %></td>
+              <td>
+                <span class="badge text-bg-<%= installments.PLAN_STATUS_BADGES[plan.status] || 'secondary' %>">
+                  <%= installments.PLAN_STATUS_LABELS[plan.status] || plan.status %>
+                </span>
+              </td>
+              <td class="text-end">
+                <a href="/installments/<%= plan._id %>" class="btn btn-sm btn-outline-primary">
+                  <i class="bi bi-eye me-1"></i>View
+                </a>
+              </td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <% if (pagination && pagination.pages > 1) { %>
+      <div class="card-footer bg-transparent py-3">
+        <%- include('../partials/pagination', { pagination: pagination, url: '/installments' }) %>
+      </div>
+    <% } %>
+  <% } %>
+</div>

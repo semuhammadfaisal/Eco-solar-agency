@@ -1,0 +1,24 @@
+<%- include('../partials/page-header', {
+  heading: 'Survey calendar', subheading: month,
+  actions: [{ label: 'Table view', url: '/surveys', icon: 'bi-list-ul', class: 'btn-outline-secondary' }].concat(canSchedule ? [{ label: 'Schedule survey', url: '/surveys/new', icon: 'bi-plus-lg', class: 'btn-primary' }] : [])
+}) %>
+<div class="card app-card mt-3">
+  <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+    <a class="btn btn-sm btn-outline-secondary" href="/surveys/calendar?month=<%= previous %>"><i class="bi bi-chevron-left"></i></a>
+    <strong><%= new Date(month + '-01T00:00:00Z').toLocaleDateString('en-PK', { month: 'long', year: 'numeric', timeZone: 'UTC' }) %></strong>
+    <a class="btn btn-sm btn-outline-secondary" href="/surveys/calendar?month=<%= next %>"><i class="bi bi-chevron-right"></i></a>
+  </div>
+  <div class="survey-calendar">
+    <% ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(function (day) { %><div class="survey-calendar-head"><%= day %></div><% }) %>
+    <% for (var blank = 0; blank < firstWeekday; blank++) { %><div class="survey-calendar-day is-empty"></div><% } %>
+    <% for (var day = 1; day <= daysInMonth; day++) { %>
+      <div class="survey-calendar-day"><div class="survey-calendar-number"><%= day %></div>
+        <% (byDay[day] || []).forEach(function (row) { var contact = row.customer || {}; %>
+          <a href="/surveys/<%= row._id %>" class="survey-calendar-event border-start border-3 border-<%= surveys.SURVEY_STATUS_BADGES[row.status] %>">
+            <strong><%= row.number %></strong><span><%= contact.name || contact.contactName || 'Survey' %></span><small><%= row.surveyor ? row.surveyor.name : '' %></small>
+          </a>
+        <% }) %>
+      </div>
+    <% } %>
+  </div>
+</div>

@@ -1,0 +1,118 @@
+<% if (signedOut) { %>
+  <div class="alert alert-info app-alert" role="status" data-auto-dismiss="5000">
+    <i class="bi bi-info-circle-fill me-1"></i>You have been signed out.
+  </div>
+<% } %>
+
+<div class="auth-form-heading">
+  <span class="auth-form-eyebrow"><i class="bi bi-sun-fill"></i> Welcome to Solar Agency</span>
+  <h1>Sign in to your workspace</h1>
+  <p><%= activeTab === 'branch' ? 'Enter your branch password to open that branch workspace.' : 'Enter your staff credentials to manage solar operations.' %></p>
+</div>
+
+<ul class="nav nav-pills auth-login-tabs mb-4" role="tablist">
+  <li class="nav-item" role="presentation">
+    <a class="nav-link <%= activeTab === 'branch' ? '' : 'active' %>" href="/login?tab=staff" role="tab">
+      <i class="bi bi-person-badge me-1"></i>Staff login
+    </a>
+  </li>
+  <li class="nav-item" role="presentation">
+    <a class="nav-link <%= activeTab === 'branch' ? 'active' : '' %>" href="/login?tab=branch" role="tab">
+      <i class="bi bi-shop me-1"></i>Branch login
+    </a>
+  </li>
+</ul>
+
+<% if (activeTab === 'branch') { %>
+  <form method="POST" action="/login/branch" class="auth-login-form" novalidate>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+    <div class="mb-3">
+      <label for="branch" class="form-label">Branch</label>
+      <div class="auth-input-wrap">
+        <i class="bi bi-shop auth-input-icon"></i>
+        <select class="form-select" id="branch" name="branch" required autofocus>
+          <option value="">Select a branch</option>
+          <% branches.forEach(function (branch) { %>
+            <option value="<%= branch._id %>"
+                    <%= String(selectedBranch) === String(branch._id) ? 'selected' : '' %>
+                    <%= branch.loginEnabled ? '' : 'disabled' %>>
+              <%= branch.code %> — <%= branch.name %><%= branch.loginEnabled ? '' : ' (login not enabled)' %>
+            </option>
+          <% }); %>
+        </select>
+      </div>
+      <% if (!branches.some(function (branch) { return branch.loginEnabled; })) { %>
+        <div class="form-text">No branch login is enabled yet. Ask the owner to set one in User Admin → Branch logins.</div>
+      <% } %>
+    </div>
+
+    <div class="mb-4" x-data="{ show: false }">
+      <label for="branchPassword" class="form-label">Branch password</label>
+      <div class="auth-input-wrap">
+        <i class="bi bi-lock auth-input-icon"></i>
+        <input type="password" class="form-control" id="branchPassword" name="password" x-ref="pw"
+               placeholder="Shared branch password" autocomplete="current-password" required>
+        <button class="auth-password-toggle" type="button"
+                @click="show = !show; $refs.pw.type = show ? 'text' : 'password'"
+                :aria-label="show ? 'Hide password' : 'Show password'">
+          <i class="bi" :class="show ? 'bi-eye-slash' : 'bi-eye'"></i>
+        </button>
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary auth-submit w-100">
+      <span>Open branch workspace</span>
+      <i class="bi bi-arrow-right"></i>
+    </button>
+  </form>
+
+  <div class="auth-help-card">
+    <span class="auth-help-icon"><i class="bi bi-shop-window"></i></span>
+    <div>
+      <strong>Branch workspace</strong>
+      <p>Branch login shows this branch's dashboard, POS sales, stock and transfers only. Company-wide records stay hidden.</p>
+    </div>
+  </div>
+<% } else { %>
+  <form method="POST" action="/login" class="auth-login-form" novalidate>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+    <div class="mb-3">
+      <label for="email" class="form-label">Email address</label>
+      <div class="auth-input-wrap">
+        <i class="bi bi-envelope auth-input-icon"></i>
+        <input type="email" class="form-control" id="email" name="email"
+               value="<%= old('email') %>" placeholder="name@solaragency.com"
+               autocomplete="username" inputmode="email" required autofocus>
+      </div>
+    </div>
+
+    <div class="mb-4" x-data="{ show: false }">
+      <label for="password" class="form-label">Password</label>
+      <div class="auth-input-wrap">
+        <i class="bi bi-lock auth-input-icon"></i>
+        <input type="password" class="form-control" id="password" name="password" x-ref="pw"
+               placeholder="Your password" autocomplete="current-password" required>
+        <button class="auth-password-toggle" type="button"
+                @click="show = !show; $refs.pw.type = show ? 'text' : 'password'"
+                :aria-label="show ? 'Hide password' : 'Show password'">
+          <i class="bi" :class="show ? 'bi-eye-slash' : 'bi-eye'"></i>
+        </button>
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary auth-submit w-100">
+      <span>Sign in securely</span>
+      <i class="bi bi-arrow-right"></i>
+    </button>
+  </form>
+
+  <div class="auth-help-card">
+    <span class="auth-help-icon"><i class="bi bi-person-check"></i></span>
+    <div>
+      <strong>Need access?</strong>
+      <p>Accounts are created by the system owner. Contact your administrator for assistance.</p>
+    </div>
+  </div>
+<% } %>

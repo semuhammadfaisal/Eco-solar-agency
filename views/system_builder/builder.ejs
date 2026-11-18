@@ -1,0 +1,741 @@
+<%- include('../partials/page-header', {
+  heading: 'System Builder',
+  subheading: 'Design, size, and price custom solar systems with live bill-of-materials and profit calculations.',
+  actions: [
+    { label: 'Saved systems', url: '/system-configs', icon: 'bi-collection', class: 'btn-outline-secondary' }
+  ]
+}) %>
+
+<div class="mt-2"
+     x-data="systemBuilder(
+       <%= JSON.stringify(initialConfig) %>,
+       <%= JSON.stringify(inventoryItems) %>,
+       <%= JSON.stringify(packages) %>,
+       <%= JSON.stringify(settings) %>,
+       <%= JSON.stringify(userPermissions) %>,
+       '<%= csrfToken %>'
+     )"
+     x-init="init()">
+
+  <!-- Live Warning & Approval Alerts -->
+  <template x-if="warnings.length > 0">
+    <div class="alert alert-warning d-flex align-items-start gap-2 mb-3 shadow-sm">
+      <i class="bi bi-exclamation-triangle-fill fs-5 flex-shrink-0 mt-1"></i>
+      <div class="flex-grow-1">
+        <div class="fw-semibold">Pricing &amp; Margin Alerts</div>
+        <ul class="mb-0 ps-3 small mt-1">
+          <template x-for="(w, idx) in warnings" :key="idx">
+            <li x-text="w"></li>
+          </template>
+        </ul>
+      </div>
+    </div>
+  </template>
+
+  <template x-if="requiresApproval">
+    <div class="alert alert-danger d-flex align-items-center gap-2 mb-3 shadow-sm">
+      <i class="bi bi-shield-lock-fill fs-5 flex-shrink-0"></i>
+      <div class="small">
+        <template x-if="userPermissions.isOwner">
+          <span><strong>Owner Notice:</strong> This pricing exceeds standard discount or margin thresholds. Saving this configuration as owner will record your approval.</span>
+        </template>
+        <template x-if="!userPermissions.isOwner">
+          <span><strong>Approval Required:</strong> This system configuration exceeds discount thresholds and will be saved in <em>Pending Owner Approval</em> status.</span>
+        </template>
+      </div>
+    </div>
+  </template>
+
+  <form method="POST" action="/system-builder" @submit="prepareSubmit" novalidate>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <input type="hidden" name="linesJson" :value="JSON.stringify(lines)">
+    <input type="hidden" name="laborCost" :value="laborCost">
+    <input type="hidden" name="transportCost" :value="transportCost">
+    <input type="hidden" name="netMeteringCost" :value="netMeteringCost">
+    <input type="hidden" name="additionalCost" :value="additionalCost">
+    <input type="hidden" name="discountType" :value="discountType">
+    <input type="hidden" name="discountValue" :value="discountValue">
+    <input type="hidden" name="salesCommissionRateBps" :value="salesCommissionRateBps">
+
+    <!-- Top Configuration Header Card -->
+    <div class="card app-card mb-3">
+      <div class="card-body p-3 p-md-4">
+        <div class="row g-3">
+          <div class="col-12 col-md-5">
+            <label class="form-label small fw-semibold text-uppercase text-muted">System Title / Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control form-control-lg fw-semibold" name="name" x-model="name" required placeholder="e.g. 5kW On-Grid System - Mr. Usman">
+          </div>
+
+          <div class="col-6 col-md-3">
+            <label class="form-label small fw-semibold text-uppercase text-muted">System Type <span class="text-danger">*</span></label>
+            <select class="form-select form-select-lg" name="systemType" x-model="systemType" @change="recalculate()">
+              <% systems.SYSTEM_TYPES.forEach(function (type) { %>
+                <option value="<%= type %>"><%= systems.SYSTEM_TYPE_LABELS[type] %></option>
+              <% }); %>
+            </select>
+          </div>
+
+          <div class="col-6 col-md-4">
+            <label class="form-label small fw-semibold text-uppercase text-muted">Load Package Template</label>
+            <div class="input-group">
+              <select class="form-select" x-model="selectedPackageId" @change="loadPackage($event.target.value)">
+                <option value="">Choose a template to load…</option>
+                <template x-for="pkg in packageTemplates" :key="pkg._id">
+                  <option :value="pkg._id" x-text="`${pkg.name} (${pkg.capacityKw} kW)`"></option>
+                </template>
+              </select>
+              <button type="button" class="btn btn-outline-secondary" @click="resetToPackage" :disabled="!selectedPackageId" title="Reload template">
+                <i class="bi bi-arrow-clockwise"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label small fw-semibold text-uppercase text-muted">Link Customer</label>
+            <select class="form-select" name="customer" x-model="customerId">
+              <option value="">No linked customer (Standalone build)</option>
+              <% customers.forEach(function (c) { %>
+                <option value="<%= c._id %>" <%= (initialConfig.customer && String(initialConfig.customer) === String(c._id)) ? 'selected' : '' %>>
+                  <%= c.name %> (<%= c.code %>)<%= c.phone ? ' · ' + c.phone : '' %>
+                </option>
+              <% }); %>
+            </select>
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label small fw-semibold text-uppercase text-muted">Linked Site Survey</label>
+            <input type="text" class="form-control" readonly :value="surveyId ? ('Survey ID: ' + surveyId) : 'None linked'">
+            <input type="hidden" name="survey" :value="surveyId || ''">
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Live System Sizing Ribbon -->
+    <div class="row g-2 mb-3">
+      <div class="col-6 col-lg-3">
+        <div class="card app-card border-primary-subtle text-center p-3 h-100">
+          <div class="text-uppercase small text-muted fw-semibold">Capacity</div>
+          <div class="display-6 fw-bold text-primary" x-text="capacityKw + ' kW'">0 kW</div>
+          <div class="small text-muted" x-text="panelCount + ' Solar Panels'">0 Panels</div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="card app-card border-success-subtle text-center p-3 h-100">
+          <div class="text-uppercase small text-muted fw-semibold">Daily Production</div>
+          <div class="display-6 fw-bold text-success" x-text="estimatedUnits.daily + ' units'">0 units</div>
+          <div class="small text-muted">Avg units/day</div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="card app-card border-info-subtle text-center p-3 h-100">
+          <div class="text-uppercase small text-muted fw-semibold">Monthly Generation</div>
+          <div class="display-6 fw-bold text-info" x-text="formatNumber(estimatedUnits.monthly) + ' units'">0 units</div>
+          <div class="small text-muted" x-text="'Yearly: ' + formatNumber(estimatedUnits.yearly) + ' units'">Yearly: 0</div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="card app-card border-warning-subtle text-center p-3 h-100">
+          <div class="text-uppercase small text-muted fw-semibold">Final Selling Price</div>
+          <div class="display-6 fw-bold text-dark" x-text="formatRupees(finalPrice)">PKR 0</div>
+          <template x-if="userPermissions.canViewProfit">
+            <div class="small text-success fw-medium" x-text="'Net Profit: ' + formatRupees(netProfit) + ' (' + netProfitMarginPercent + '%)'"></div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Workspace: Left BOM Editor, Right Financials -->
+    <div class="row g-3">
+      <!-- Left Column: Bill of Materials -->
+      <div class="col-12 col-xl-8">
+        <div class="card app-card mb-3">
+          <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+            <h2 class="h6 mb-0 fw-semibold">
+              <i class="bi bi-box-seam me-1 text-primary"></i>Bill of Materials (BOM)
+            </h2>
+            <span class="badge bg-light text-dark border" x-text="lines.length + (lines.length === 1 ? ' Item' : ' Items')">0 Items</span>
+          </div>
+
+          <div class="card-body p-3">
+            <!-- Add Item Toolbar -->
+            <div class="border rounded p-3 bg-light-subtle mb-3">
+              <div class="small fw-semibold text-uppercase text-muted mb-2">Pick Item From Inventory</div>
+              <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-3">
+                  <label class="form-label small text-muted mb-1">Category Filter</label>
+                  <select class="form-select form-select-sm" x-model="itemCategoryFilter">
+                    <option value="">All Categories</option>
+                    <% inventory.ITEM_CATEGORIES.forEach(function (cat) { %>
+                      <option value="<%= cat %>"><%= inventory.ITEM_CATEGORY_LABELS[cat] || cat %></option>
+                    <% }); %>
+                  </select>
+                </div>
+                <div class="col-12 col-md-5">
+                  <label class="form-label small text-muted mb-1">Select Item</label>
+                  <select class="form-select form-select-sm" x-model="pickedItemId">
+                    <option value="">Choose item…</option>
+                    <template x-for="item in filteredInventory" :key="item._id">
+                      <option :value="item._id"
+                              x-text="`[${item.category.toUpperCase()}] ${item.name} (${item.sku}) · Stock: ${item.currentStock}`">
+                      </option>
+                    </template>
+                  </select>
+                </div>
+                <div class="col-6 col-md-2">
+                  <label class="form-label small text-muted mb-1">Quantity</label>
+                  <input type="number" step="1" min="1" class="form-control form-control-sm" x-model.number="pickedQty">
+                </div>
+                <div class="col-6 col-md-2">
+                  <button type="button" class="btn btn-primary btn-sm w-100" @click="addLineItem()" :disabled="!pickedItemId || pickedQty <= 0">
+                    <i class="bi bi-plus-lg me-1"></i>Add
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Items Table -->
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover align-middle app-table mb-0">
+                <thead class="table-light small">
+                  <tr>
+                    <th style="width:30px">#</th>
+                    <th>Item &amp; Specifications</th>
+                    <th style="width:110px">Quantity</th>
+                    <th style="width:140px">Unit Selling Price (PKR)</th>
+                    <th style="width:130px" class="text-end">Total Price (PKR)</th>
+                    <template x-if="userPermissions.canViewCosts">
+                      <th style="width:120px" class="text-end">Cost (PKR)</th>
+                    </template>
+                    <template x-if="userPermissions.canViewProfit">
+                      <th style="width:90px" class="text-end">Margin</th>
+                    </template>
+                    <th style="width:40px"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="(line, index) in lines" :key="index">
+                    <tr>
+                      <td class="text-muted small" x-text="index + 1"></td>
+                      <td>
+                        <div class="fw-semibold text-body" x-text="line.itemSnapshot.name"></div>
+                        <div class="d-flex flex-wrap gap-2 text-muted small mt-1 font-monospace">
+                          <span x-text="line.itemSnapshot.sku"></span>
+                          <span class="badge bg-secondary-subtle text-secondary text-uppercase" x-text="line.itemSnapshot.category"></span>
+                          <template x-if="line.itemSnapshot.wattage">
+                            <span class="badge bg-info-subtle text-info" x-text="line.itemSnapshot.wattage + 'W'"></span>
+                          </template>
+                          <template x-if="line.itemSnapshot.capacityKw">
+                            <span class="badge bg-primary-subtle text-primary" x-text="line.itemSnapshot.capacityKw + 'kW'"></span>
+                          </template>
+                        </div>
+                      </td>
+                      <td>
+                        <div class="input-group input-group-sm">
+                          <input type="number" step="1" min="0.1" class="form-control" x-model.number="line.qty" @input="recalculate()">
+                          <span class="input-group-text small" x-text="line.itemSnapshot.unit || 'pcs'"></span>
+                        </div>
+                      </td>
+                      <td>
+                        <input type="number" step="1" min="0" class="form-control form-control-sm text-end"
+                               x-model.number="line.unitSellingPrice" @input="recalculate()">
+                      </td>
+                      <td class="text-end fw-semibold" x-text="formatRupees(line.qty * line.unitSellingPrice)">
+                      </td>
+                      <template x-if="userPermissions.canViewCosts">
+                        <td class="text-end small text-muted" x-text="formatRupees(line.qty * line.unitCost)"></td>
+                      </template>
+                      <template x-if="userPermissions.canViewProfit">
+                        <td class="text-end small"
+                            :class="(line.unitSellingPrice < line.unitCost) ? 'text-danger fw-bold' : 'text-success'"
+                            x-text="calculateLineMarginPercent(line) + '%'">
+                        </td>
+                      </template>
+                      <td class="text-center">
+                        <button type="button" class="btn btn-link text-danger p-0" @click="removeLineItem(index)" title="Remove item">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </td>
+                    </tr>
+                  </template>
+                  <tr x-show="lines.length === 0">
+                    <td :colspan="userPermissions.canViewCosts && userPermissions.canViewProfit ? 8 : (userPermissions.canViewCosts || userPermissions.canViewProfit ? 7 : 6)"
+                        class="text-center text-muted py-5">
+                      <i class="bi bi-box-seam fs-1 d-block mb-2 text-secondary-subtle"></i>
+                      <p class="mb-1">No items in the system yet.</p>
+                      <div class="small">Choose an inventory item above or load a package template.</div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Remarks & Notes -->
+        <div class="card app-card">
+          <div class="card-header bg-transparent">
+            <h2 class="h6 mb-0 fw-semibold">Technical Notes &amp; Scope Remarks</h2>
+          </div>
+          <div class="card-body p-3">
+            <textarea class="form-control" name="remarks" rows="3" x-model="remarks"
+                      placeholder="Specify inverter make, mounting structure pitch/elevated details, DC/AC breaker specs, warranty coverage details…"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Financials, Overheads & Margin Summary -->
+      <div class="col-12 col-xl-4">
+        <div class="card app-card mb-3">
+          <div class="card-header bg-transparent">
+            <h2 class="h6 mb-0 fw-semibold">Installation Overheads (PKR)</h2>
+          </div>
+          <div class="card-body p-3">
+            <div class="mb-3">
+              <label class="form-label small text-muted mb-1">Labor &amp; Installation</label>
+              <div class="input-group input-group-sm">
+                <span class="input-group-text">Rs</span>
+                <input type="number" step="100" min="0" class="form-control text-end" x-model.number="laborCost" @input="recalculate()">
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label small text-muted mb-1">Transport &amp; Freight</label>
+              <div class="input-group input-group-sm">
+                <span class="input-group-text">Rs</span>
+                <input type="number" step="100" min="0" class="form-control text-end" x-model.number="transportCost" @input="recalculate()">
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label small text-muted mb-1">Net-Metering Processing Fee</label>
+              <div class="input-group input-group-sm">
+                <span class="input-group-text">Rs</span>
+                <input type="number" step="100" min="0" class="form-control text-end" x-model.number="netMeteringCost" @input="recalculate()">
+              </div>
+            </div>
+            <div>
+              <label class="form-label small text-muted mb-1">Additional / Ancillary Services</label>
+              <div class="input-group input-group-sm">
+                <span class="input-group-text">Rs</span>
+                <input type="number" step="100" min="0" class="form-control text-end" x-model.number="additionalCost" @input="recalculate()">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card app-card mb-3">
+          <div class="card-header bg-transparent">
+            <h2 class="h6 mb-0 fw-semibold">Discounts &amp; Commission</h2>
+          </div>
+          <div class="card-body p-3">
+            <div class="mb-3">
+              <label class="form-label small text-muted mb-1">Discount Type</label>
+              <div class="btn-group btn-group-sm w-100" role="group">
+                <input type="radio" class="btn-check" name="dtOption" id="dtPercent" value="percent" x-model="discountType" @change="recalculate()">
+                <label class="btn btn-outline-secondary" for="dtPercent">Percentage (%)</label>
+
+                <input type="radio" class="btn-check" name="dtOption" id="dtAmount" value="amount" x-model="discountType" @change="recalculate()">
+                <label class="btn btn-outline-secondary" for="dtAmount">Fixed (PKR)</label>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label small text-muted mb-1">
+                Discount Value <span x-text="discountType === 'percent' ? '(%)' : '(PKR)'"></span>
+              </label>
+              <div class="input-group input-group-sm">
+                <span class="input-group-text" x-text="discountType === 'percent' ? '%' : 'Rs'"></span>
+                <input type="number" step="0.5" min="0" class="form-control text-end" x-model.number="discountValue" @input="recalculate()">
+              </div>
+              <template x-if="discountPercent > settings.maxDiscountPercentWithoutApproval">
+                <div class="form-text text-danger small mt-1">
+                  <i class="bi bi-exclamation-circle me-1"></i>Exceeds <%= settings.maxDiscountPercentWithoutApproval %>% limit (requires owner approval).
+                </div>
+              </template>
+            </div>
+
+            <template x-if="userPermissions.canViewCosts">
+              <div>
+                <label class="form-label small text-muted mb-1">Sales Commission (bps)</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="25" min="0" max="10000" class="form-control text-end" x-model.number="salesCommissionRateBps" @input="recalculate()">
+                  <span class="input-group-text small" x-text="((salesCommissionRateBps || 0) / 100).toFixed(2) + '%'"></span>
+                </div>
+                <div class="form-text small">e.g. 200 bps = 2.00% of final price.</div>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Commercial Pricing Summary Card -->
+        <div class="card app-card shadow-sm border-dark-subtle mb-3">
+          <div class="card-header bg-light">
+            <h2 class="h6 mb-0 fw-semibold">System Pricing Summary</h2>
+          </div>
+          <div class="card-body p-3">
+            <dl class="row small mb-0 gy-2">
+              <dt class="col-7 text-muted fw-normal">Equipment Subtotal</dt>
+              <dd class="col-5 text-end fw-semibold" x-text="formatRupees(totalItemSellingPrice)">PKR 0</dd>
+
+              <dt class="col-7 text-muted fw-normal">Installation &amp; Overheads</dt>
+              <dd class="col-5 text-end fw-semibold" x-text="formatRupees(totalOverheads)">PKR 0</dd>
+
+              <dt class="col-7 text-muted fw-normal">Gross Price</dt>
+              <dd class="col-5 text-end fw-semibold" x-text="formatRupees(grossPrice)">PKR 0</dd>
+
+              <template x-if="discountAmount > 0">
+                <div class="d-flex justify-content-between text-danger small py-1">
+                  <dt class="text-danger fw-normal">Discount (<span x-text="discountPercent.toFixed(1) + '%'"></span>)</dt>
+                  <dd class="text-end fw-semibold mb-0">- <span x-text="formatRupees(discountAmount)"></span></dd>
+                </div>
+              </template>
+
+              <hr class="my-2">
+
+              <dt class="col-7 text-body fs-6 fw-bold">Final Selling Price</dt>
+              <dd class="col-5 text-end fs-6 fw-bold text-primary" x-text="formatRupees(finalPrice)">PKR 0</dd>
+
+              <!-- Confidential Owner/Accountant Profit Breakdown -->
+              <template x-if="userPermissions.canViewCosts">
+                <div class="border-top pt-2 mt-2 w-100">
+                  <div class="d-flex justify-content-between small text-muted py-1">
+                    <span>Total Base Cost:</span>
+                    <span class="fw-medium" x-text="formatRupees(totalBaseCost)">PKR 0</span>
+                  </div>
+                  <template x-if="salesCommissionAmount > 0">
+                    <div class="d-flex justify-content-between small text-muted py-1">
+                      <span>Sales Commission:</span>
+                      <span class="fw-medium" x-text="formatRupees(salesCommissionAmount)">PKR 0</span>
+                    </div>
+                  </template>
+                  <div class="d-flex justify-content-between py-1"
+                       :class="netProfit < 0 ? 'text-danger' : 'text-success'">
+                    <span class="fw-bold">Net Profit:</span>
+                    <span class="fw-bold" x-text="formatRupees(netProfit) + ' (' + netProfitMarginPercent + '%)'">PKR 0</span>
+                  </div>
+                </div>
+              </template>
+            </dl>
+          </div>
+          <div class="card-footer bg-transparent p-3">
+            <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold" :disabled="lines.length === 0">
+              <i class="bi bi-save me-1"></i>Save System Configuration
+            </button>
+            <div class="text-center mt-2 small text-muted">
+              Generates a formal Bill of Materials (BOM) linked to customer/survey.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script>
+function systemBuilder(initialConfig, inventoryItems, packageTemplates, settings, userPermissions, csrfToken) {
+  return {
+    csrfToken: csrfToken,
+    name: initialConfig.name || 'New Solar System',
+    systemType: initialConfig.systemType || 'on_grid',
+    customerId: initialConfig.customer || '',
+    surveyId: initialConfig.survey || '',
+    selectedPackageId: initialConfig.package || '',
+    remarks: initialConfig.remarks || '',
+
+    laborCost: initialConfig.laborCost || 0,
+    transportCost: initialConfig.transportCost || 0,
+    netMeteringCost: initialConfig.netMeteringCost || 0,
+    additionalCost: initialConfig.additionalCost || 0,
+
+    discountType: initialConfig.discountType || 'percent',
+    discountValue: initialConfig.discountValue || 0,
+    salesCommissionRateBps: initialConfig.salesCommissionRateBps || 0,
+
+    lines: Array.isArray(initialConfig.lines) ? initialConfig.lines.map(l => ({
+      item: l.item,
+      itemSnapshot: l.itemSnapshot || {},
+      qty: Number(l.qty) || 1,
+      unitSellingPrice: Number(l.unitSellingPricePaisa ? l.unitSellingPricePaisa / 100 : (l.unitSellingPrice || 0)),
+      unitCost: Number(l.unitCostPaisa ? l.unitCostPaisa / 100 : (l.unitCost || 0)),
+      notes: l.notes || ''
+    })) : [],
+
+    inventoryItems: inventoryItems || [],
+    packageTemplates: packageTemplates || [],
+    settings: settings || { minMarginPercent: 10, maxDiscountPercentWithoutApproval: 5, surveyMonthlyUnitsPerKw: 120 },
+    userPermissions: userPermissions || {},
+
+    itemCategoryFilter: '',
+    pickedItemId: '',
+    pickedQty: 1,
+
+    // Reactive calculated totals
+    capacityKw: 0,
+    panelCount: 0,
+    estimatedUnits: { daily: 0, monthly: 0, yearly: 0 },
+    totalItemSellingPrice: 0,
+    totalItemCost: 0,
+    totalOverheads: 0,
+    totalBaseCost: 0,
+    grossPrice: 0,
+    discountAmount: 0,
+    discountPercent: 0,
+    salesCommissionAmount: 0,
+    finalPrice: 0,
+    netProfit: 0,
+    netProfitMarginPercent: 0,
+    warnings: [],
+    requiresApproval: false,
+    debounceTimer: null,
+
+    get filteredInventory() {
+      if (!this.itemCategoryFilter) return this.inventoryItems;
+      return this.inventoryItems.filter(i => i.category === this.itemCategoryFilter);
+    },
+
+    init() {
+      this.recalculate();
+    },
+
+    addLineItem() {
+      if (!this.pickedItemId || this.pickedQty <= 0) return;
+      const found = this.inventoryItems.find(i => String(i._id) === String(this.pickedItemId));
+      if (!found) return;
+
+      const existingIndex = this.lines.findIndex(l => String(l.item) === String(this.pickedItemId));
+      if (existingIndex >= 0) {
+        this.lines[existingIndex].qty += Number(this.pickedQty);
+      } else {
+        this.lines.push({
+          item: found._id,
+          itemSnapshot: {
+            sku: found.sku,
+            name: found.name,
+            category: found.category || 'other',
+            brand: found.brand || '',
+            model: found.model || '',
+            unit: found.unit || 'pcs',
+            wattage: found.wattage,
+            capacityKw: found.capacityKw
+          },
+          qty: Number(this.pickedQty),
+          unitSellingPrice: Number((found.sellingPricePaisa || 0) / 100),
+          unitCost: Number((found.unitCostPaisa || found.avgCostPaisa || found.purchasePricePaisa || 0) / 100),
+          notes: ''
+        });
+      }
+
+      this.pickedItemId = '';
+      this.pickedQty = 1;
+      this.recalculate();
+    },
+
+    removeLineItem(index) {
+      this.lines.splice(index, 1);
+      this.recalculate();
+    },
+
+    calculateLineMarginPercent(line) {
+      if (!line.unitSellingPrice || line.unitSellingPrice <= 0) return 0;
+      const margin = (line.unitSellingPrice - line.unitCost) / line.unitSellingPrice;
+      return (margin * 100).toFixed(1);
+    },
+
+    async loadPackage(packageId) {
+      if (!packageId) return;
+      try {
+        const res = await fetch(`/packages/${packageId}/json`);
+        const json = await res.json();
+        if (json.success && json.data) {
+          const pkg = json.data;
+          this.systemType = pkg.systemType || this.systemType;
+          this.lines = pkg.lines.map(l => ({
+            item: l.item,
+            itemSnapshot: l.itemSnapshot,
+            qty: l.qty,
+            unitSellingPrice: Number((l.unitSellingPricePaisa || 0) / 100),
+            unitCost: Number((l.unitCostPaisa || 0) / 100),
+            notes: l.notes || ''
+          }));
+          this.laborCost = Number((pkg.laborCostPaisa || 0) / 100);
+          this.transportCost = Number((pkg.transportCostPaisa || 0) / 100);
+          this.netMeteringCost = Number((pkg.netMeteringCostPaisa || 0) / 100);
+          this.additionalCost = Number((pkg.additionalCostPaisa || 0) / 100);
+          this.discountValue = pkg.defaultDiscountPercent || 0;
+          this.recalculate();
+        }
+      } catch (err) {
+        console.error('Failed to load package:', err);
+      }
+    },
+
+    resetToPackage() {
+      if (this.selectedPackageId) {
+        this.loadPackage(this.selectedPackageId);
+      }
+    },
+
+    recalculate() {
+      // 1. Client-side immediate reactive calculation
+      let panelCount = 0;
+      let panelWatts = 0;
+      let inverterKw = 0;
+      let batteryKwh = 0;
+      let itemSellingTotal = 0;
+      let itemCostTotal = 0;
+
+      for (const line of this.lines) {
+        const qty = Number(line.qty) || 0;
+        const snap = line.itemSnapshot || {};
+        const cat = (snap.category || '').toLowerCase();
+        const watts = Number(snap.wattage) || 0;
+        const kw = Number(snap.capacityKw) || 0;
+
+        if (cat === 'panel') {
+          panelCount += qty;
+          panelWatts += qty * watts;
+        } else if (cat === 'inverter') {
+          inverterKw += qty * (kw || watts / 1000);
+        } else if (cat === 'battery') {
+          batteryKwh += qty * kw;
+        }
+
+        itemSellingTotal += qty * (Number(line.unitSellingPrice) || 0);
+        itemCostTotal += qty * (Number(line.unitCost) || 0);
+      }
+
+      this.panelCount = Math.round(panelCount);
+      const calculatedPanelKw = panelWatts / 1000;
+      this.capacityKw = Number((calculatedPanelKw > 0 ? calculatedPanelKw : inverterKw).toFixed(2));
+
+      const monthlyPerKw = Number(this.settings.surveyMonthlyUnitsPerKw) || 120;
+      const monthly = Math.round(this.capacityKw * monthlyPerKw);
+      this.estimatedUnits = {
+        monthly: monthly,
+        daily: Number((monthly / 30).toFixed(1)),
+        yearly: monthly * 12
+      };
+
+      this.totalItemSellingPrice = Math.round(itemSellingTotal);
+      this.totalItemCost = Math.round(itemCostTotal);
+      this.totalOverheads = Math.round(
+        (Number(this.laborCost) || 0) +
+        (Number(this.transportCost) || 0) +
+        (Number(this.netMeteringCost) || 0) +
+        (Number(this.additionalCost) || 0)
+      );
+
+      this.totalBaseCost = this.totalItemCost + this.totalOverheads;
+      this.grossPrice = this.totalItemSellingPrice + this.totalOverheads;
+
+      if (this.discountType === 'percent') {
+        this.discountPercent = Math.min(100, Math.max(0, Number(this.discountValue) || 0));
+        this.discountAmount = Math.round(this.grossPrice * (this.discountPercent / 100));
+      } else {
+        this.discountAmount = Math.min(this.grossPrice, Math.max(0, Number(this.discountValue) || 0));
+        this.discountPercent = this.grossPrice > 0 ? Number(((this.discountAmount / this.grossPrice) * 100).toFixed(2)) : 0;
+      }
+
+      this.finalPrice = Math.max(0, this.grossPrice - this.discountAmount);
+
+      const commBps = Number(this.salesCommissionRateBps) || 0;
+      this.salesCommissionAmount = Math.round(this.finalPrice * (commBps / 10000));
+
+      this.netProfit = this.finalPrice - this.totalBaseCost - this.salesCommissionAmount;
+      this.netProfitMarginPercent = this.finalPrice > 0 ? Number(((this.netProfit / this.finalPrice) * 100).toFixed(2)) : 0;
+
+      // Local warning checks
+      const warn = [];
+      let reqApproval = false;
+
+      if (this.finalPrice < this.totalBaseCost && this.lines.length > 0) {
+        warn.push('Below-cost warning: Final selling price is below total base cost.');
+        reqApproval = true;
+      } else if (this.netProfitMarginPercent < (this.settings.minMarginPercent || 10) && this.lines.length > 0) {
+        warn.push(`Low margin warning: Profit margin (${this.netProfitMarginPercent}%) is below company minimum (${this.settings.minMarginPercent}%).`);
+      }
+
+      if (this.discountPercent > (this.settings.maxDiscountPercentWithoutApproval || 5)) {
+        warn.push(`Discount approval required: Discount of ${this.discountPercent.toFixed(1)}% exceeds the ${this.settings.maxDiscountPercentWithoutApproval}% limit.`);
+        reqApproval = true;
+      }
+
+      this.warnings = warn;
+      this.requiresApproval = reqApproval;
+
+      // 2. Debounced authoritative server-side calculate API
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = setTimeout(() => {
+        this.syncServerCalculation();
+      }, 400);
+    },
+
+    async syncServerCalculation() {
+      if (!this.lines.length) return;
+      try {
+        const payload = {
+          lines: this.lines.map(l => ({
+            itemId: l.item,
+            qty: l.qty,
+            unitSellingPrice: l.unitSellingPrice,
+            notes: l.notes
+          })),
+          laborCost: this.laborCost,
+          transportCost: this.transportCost,
+          netMeteringCost: this.netMeteringCost,
+          additionalCost: this.additionalCost,
+          discountType: this.discountType,
+          discountValue: this.discountType === 'amount' ? this.discountAmount : this.discountPercent,
+          salesCommissionRateBps: this.salesCommissionRateBps
+        };
+
+        const res = await fetch('/system-builder/calculate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': this.csrfToken
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const json = await res.json();
+        if (json.success && json.data) {
+          const s = json.data;
+          this.capacityKw = s.capacityKw;
+          this.panelCount = s.panelCount;
+          this.estimatedUnits = s.estimatedUnits || this.estimatedUnits;
+          this.finalPrice = s.finalPricePaisa ? s.finalPricePaisa / 100 : this.finalPrice;
+          this.grossPrice = s.grossPricePaisa ? s.grossPricePaisa / 100 : this.grossPrice;
+          this.discountAmount = s.discountPaisa ? s.discountPaisa / 100 : this.discountAmount;
+          this.discountPercent = s.discountPercent !== undefined ? s.discountPercent : this.discountPercent;
+          this.warnings = s.warnings || this.warnings;
+          this.requiresApproval = Boolean(s.requiresApproval);
+
+          if (this.userPermissions.canViewProfit && s.netProfitPaisa !== undefined) {
+            this.netProfit = s.netProfitPaisa / 100;
+            this.netProfitMarginPercent = s.netProfitMarginPercent;
+          }
+          if (this.userPermissions.canViewCosts && s.totalBaseCostPaisa !== undefined) {
+            this.totalBaseCost = s.totalBaseCostPaisa / 100;
+          }
+        }
+      } catch (err) {
+        // network or auth issue fallback to local
+      }
+    },
+
+    prepareSubmit() {
+      // Lines serialized via :value
+    },
+
+    formatRupees(amount) {
+      const val = Math.round(Number(amount) || 0);
+      return 'PKR ' + val.toLocaleString('en-PK');
+    },
+
+    formatNumber(num) {
+      return (Number(num) || 0).toLocaleString('en-PK');
+    }
+  };
+}
+</script>

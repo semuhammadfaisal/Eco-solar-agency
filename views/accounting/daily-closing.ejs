@@ -1,0 +1,729 @@
+<%
+  // Daily closing & cash drawer reconciliation.
+  // `drawer` may be null for a date that was never opened; `summary` is the
+  // live or frozen cash build-up returned by dailyClosingService.
+  var viewer = currentUser || null;
+  var returnTo = '/accounting/daily-closing?branch=' + branch._id + '&date=' + dateString;
+  var isOpen = drawer && drawer.status === 'open';
+  var isClosed = drawer && drawer.status === 'closed';
+  var statusClass = isClosed ? 'text-bg-success' : (isOpen ? 'text-bg-warning' : 'text-bg-secondary');
+  var statusLabel = isClosed ? 'Closed' : (isOpen ? 'Open' : 'Not opened');
+  var defaultCloser = old('closedByName', viewer ? (viewer.name || viewer.branchName || '') : '');
+  var expectedPaisa = summary ? Number(summary.expectedCashPaisa || 0) : 0;
+  var countedPaisa = drawer && drawer.countedCashPaisa !== null && drawer.countedCashPaisa !== undefined
+    ? Number(drawer.countedCashPaisa)
+    : null;
+  var variancePaisa = drawer && drawer.status === 'closed' ? Number(drawer.variancePaisa || 0) : null;
+  var pageActions = [];
+  if (drawer) {
+    pageActions.push({
+      label: 'Print drawer sign-off',
+      url: '/accounting/daily-closing?branch=' + branch._id + '&date=' + dateString + '&format=pdf',
+      icon: 'bi-file-earmark-pdf',
+      class: 'btn-outline-danger',
+      target: '_blank'
+    });
+  }
+  if (can('accounting.view')) {
+    pageActions.push({ label: 'Cash Book', url: '/accounting/cash-book', icon: 'bi-cash-stack', class: 'btn-outline-secondary' });
+  }
+%>
+
+<%- include('../partials/page-header', {
+  heading: 'Daily Closing & Cash Drawer',
+  subheading: 'Count the drawer, explain every cash movement, and lock the day with a signed variance record.',
+  actions: pageActions
+}) %>
+
+<!-- Branch & business-date selector -->
+<div class="card app-card mb-4 shadow-sm">
+  <div class="card-body p-3">
+    <form method="GET" action="/accounting/daily-closing" class="row g-2 align-items-end">
+      <% if (canChooseBranch) { %>
+        <div class="col-12 col-md-4">
+          <label class="form-label small fw-semibold">Branch</label>
+          <select name="branch" class="form-select form-select-sm">
+            <% branches.forEach(function (b) { %>
+              <option value="<%= b._id %>" <%= String(b._id) === String(branch._id) ? 'selected' : '' %>>
+                <%= b.code %> — <%= b.name %><%= b.type === 'main' ? ' (Main)' : '' %>
+              </option>
+            <% }); %>
+          </select>
+        </div>
+      <% } else { %>
+        <div class="col-12 col-md-4">
+          <label class="form-label small fw-semibold">Branch</label>
+          <input type="text" class="form-control form-control-sm" value="<%= branch.code %> — <%= branch.name %>" readonly>
+        </div>
+      <% } %>
+      <div class="col-12 col-md-4">
+        <label class="form-label small fw-semibold">Business date</label>
+        <input type="date" name="date" value="<%= dateString %>" class="form-control form-control-sm" max="<%= currentDateString %>">
+      </div>
+      <div class="col-12 col-md-4 d-flex gap-2">
+        <button type="submit" class="btn btn-sm btn-dark flex-grow-1">
+          <i class="bi bi-calendar-check me-1"></i>Load day
+        </button>
+        <a href="/accounting/daily-closing?branch=<%= branch._id %>" class="btn btn-sm btn-outline-secondary">Today</a>
+      </div>
+    </form>
+    <div class="d-flex flex-wrap gap-3 mt-3 small text-muted">
+      <span><i class="bi bi-clock me-1"></i>Business day: <strong><%= window.startTime %></strong> → <strong><%= window.endTime %></strong><%= window.overnight ? ' (overnight)' : '' %></span>
+      <span><i class="bi bi-calendar3 me-1"></i>Window: <%= formatDateTime(window.periodStart) %> — <%= formatDateTime(window.periodEnd) %></span>
+      <span><i class="bi bi-alarm me-1"></i>Local time now: <strong><%= window.localNow %></strong></span>
+      <% if (isCurrentBusinessDay && isOpen && !window.isPastClose) { %>
+        <span class="text-success"><i class="bi bi-unlock me-1"></i>Drawer is open for business.</span>
+      <% } else if (isCurrentBusinessDay && isOpen && window.isPastClose) { %>
+        <span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Closing time has passed — close the drawer.</span>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+<% if (!drawer) { %>
+  <div class="alert alert-warning border-0 shadow-sm">
+    <div class="d-flex gap-2">
+      <i class="bi bi-info-circle fs-5"></i>
+      <div>
+        <div class="fw-semibold">No cash drawer exists for this business date.</div>
+        <div class="small mb-0">
+          A drawer is created automatically when the business day starts (<strong><%= window.startTime %></strong>).
+          Future dates cannot be opened early, and a past date is shown only if a drawer already exists for it.
+        </div>
+      </div>
+    </div>
+  </div>
+<% } else { %>
+
+  <!-- Drawer identity / status -->
+  <div class="card app-card mb-4 shadow-sm border-start border-4 <%= isClosed ? 'border-success' : 'border-warning' %>">
+    <div class="card-body p-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="fw-bold fs-5"><i class="bi bi-safe me-2"></i><%= drawer.number %></span>
+          <span class="badge <%= statusClass %>"><%= statusLabel %></span>
+          <span class="badge text-bg-light border"><%= drawer.branchCode %></span>
+        </div>
+        <div class="small text-muted">
+          <%= formatDate(drawer.businessDate) %> · <%= formatDateTime(drawer.periodStart) %> — <%= formatDateTime(drawer.periodEnd) %>
+        </div>
+      </div>
+      <div class="text-end small text-muted">
+        <% if (isClosed) { %>
+          <div>Closed by <strong class="text-dark"><%= drawer.closedByName || '—' %></strong></div>
+          <div><%= formatDateTime(drawer.closedAt) %></div>
+          <% if (drawer.reopenCount) { %>
+            <div class="text-warning-emphasis"><i class="bi bi-arrow-counterclockwise me-1"></i>Reopened <%= drawer.reopenCount %> time(s)</div>
+          <% } %>
+        <% } else { %>
+          <div>Opening float source: <strong class="text-dark"><%= drawer.openingFloatSource %></strong></div>
+          <div>Last refreshed <%= formatRelative(drawer.updatedAt) %></div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cash build-up + variance -->
+  <div class="row g-4 mb-4">
+    <div class="col-12 col-lg-7">
+      <div class="card app-card shadow-sm h-100">
+        <div class="card-header bg-body-tertiary py-3">
+          <h2 class="h6 fw-bold mb-0"><i class="bi bi-cash-stack me-2"></i>Cash build-up</h2>
+        </div>
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <tbody>
+              <tr>
+                <td>Opening float <span class="text-muted small">(<%= drawer.openingFloatSource === 'previous' ? 'previous drawer count' : drawer.openingFloatSource === 'manual' ? 'manual' : 'configured default' %>)</span></td>
+                <td class="text-end font-monospace"><%= formatPKR(summary.openingFloatPaisa) %></td>
+              </tr>
+              <tr>
+                <td><i class="bi bi-plus-circle text-success me-1"></i>POS cash receipts <span class="text-muted small">(<%= summary.cashSaleCount || 0 %> cash, <%= summary.bankSaleCount || 0 %> bank)</span></td>
+                <td class="text-end font-monospace text-success">+<%= formatPKR(summary.cashSalesPaisa) %></td>
+              </tr>
+              <tr>
+                <td><i class="bi bi-dash-circle text-danger me-1"></i>Cash expenses paid from drawer <span class="text-muted small">(<%= summary.expenseCount || 0 %>)</span></td>
+                <td class="text-end font-monospace text-danger">−<%= formatPKR(summary.cashExpensesPaisa) %></td>
+              </tr>
+              <tr>
+                <td><i class="bi bi-plus-circle text-success me-1"></i>Manual cash in</td>
+                <td class="text-end font-monospace text-success">+<%= formatPKR(summary.cashInPaisa) %></td>
+              </tr>
+              <tr>
+                <td><i class="bi bi-dash-circle text-danger me-1"></i>Manual cash out</td>
+                <td class="text-end font-monospace text-danger">−<%= formatPKR(summary.cashOutPaisa) %></td>
+              </tr>
+            </tbody>
+            <tfoot class="table-light">
+              <tr class="fw-bold">
+                <td>Expected cash in drawer</td>
+                <td class="text-end font-monospace fs-6"><%= formatPKR(summary.expectedCashPaisa) %></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-5">
+      <div class="card app-card shadow-sm h-100">
+        <div class="card-header bg-body-tertiary py-3">
+          <h2 class="h6 fw-bold mb-0"><i class="bi bi-clipboard-check me-2"></i>Physical count</h2>
+        </div>
+        <div class="card-body">
+          <% if (isClosed) { %>
+            <div class="d-flex justify-content-between py-2 border-bottom">
+              <span class="text-muted">Counted cash</span>
+              <span class="font-monospace fw-bold"><%= formatPKR(countedPaisa) %></span>
+            </div>
+            <div class="d-flex justify-content-between py-2 border-bottom">
+              <span class="text-muted">Expected cash</span>
+              <span class="font-monospace"><%= formatPKR(summary.expectedCashPaisa) %></span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center py-3">
+              <span class="fw-semibold">Variance</span>
+              <span class="font-monospace fw-bold fs-5 <%= variancePaisa === 0 ? 'text-success' : (variancePaisa > 0 ? 'text-warning-emphasis' : 'text-danger') %>">
+                <%= variancePaisa > 0 ? '+' : '' %><%= formatPKR(variancePaisa) %>
+              </span>
+            </div>
+            <div class="alert <%= variancePaisa === 0 ? 'alert-success' : 'alert-warning' %> py-2 px-3 small mb-0">
+              <% if (variancePaisa === 0) { %>
+                <i class="bi bi-check2-circle me-1"></i>Drawer balances exactly.
+              <% } else { %>
+                <div class="fw-semibold"><%= variancePaisa > 0 ? 'Cash over' : 'Cash short' %> by <%= formatPKR(Math.abs(variancePaisa)) %></div>
+                <div><%= drawer.varianceReason || 'No reason recorded.' %></div>
+                <% if (drawer.varianceJournalEntry) { %>
+                  <div class="mt-1"><i class="bi bi-journal-text me-1"></i>Posted to 6070 Cash Over &amp; Short.</div>
+                <% } %>
+              <% } %>
+            </div>
+            <% if (drawer.closingNotes) { %>
+              <div class="small text-muted mt-3"><span class="fw-semibold text-dark">Notes:</span> <%= drawer.closingNotes %></div>
+            <% } %>
+          <% } else { %>
+            <div class="text-center py-4">
+              <i class="bi bi-calculator display-6 text-muted"></i>
+              <p class="text-muted small mt-3 mb-1">Expected cash is recalculated live from POS receipts, cash expenses and manual adjustments.</p>
+              <div class="font-monospace fw-bold fs-4 text-dark"><%= formatPKR(summary.expectedCashPaisa) %></div>
+            </div>
+            <% if (canManage) { %>
+              <a href="#closeDrawerCard" class="btn btn-success w-100">
+                <i class="bi bi-lock me-1"></i>Count &amp; close drawer
+              </a>
+            <% } else { %>
+              <div class="alert alert-light border small mb-0">You can view this drawer but not close it.</div>
+            <% } %>
+          <% } %>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <% if (isOpen && canManage) { %>
+    <!-- Manual adjustments -->
+    <div class="card app-card mb-4 shadow-sm" id="adjustmentCard">
+      <div class="card-header bg-body-tertiary py-3 d-flex justify-content-between align-items-center">
+        <h2 class="h6 fw-bold mb-0"><i class="bi bi-arrow-left-right me-2"></i>Extra cash in / out</h2>
+        <span class="badge text-bg-light border"><%= (drawer.adjustments || []).length %> recorded</span>
+      </div>
+      <div class="card-body">
+        <p class="small text-muted">
+          Record cash that moved outside POS sales and expense vouchers — for example a cash drop to the safe,
+          a small purchase paid from the drawer, or change brought in from the bank. Every movement needs a reason.
+        </p>
+        <form method="POST" action="/accounting/daily-closing/adjustment" class="row g-2 align-items-end mb-3">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input type="hidden" name="branch" value="<%= branch._id %>">
+          <input type="hidden" name="businessDate" value="<%= dateString %>">
+          <input type="hidden" name="returnTo" value="<%= returnTo %>">
+          <div class="col-12 col-md-2">
+            <label class="form-label small fw-semibold">Direction</label>
+            <select name="kind" class="form-select form-select-sm" required>
+              <option value="in">Cash in (+)</option>
+              <option value="out">Cash out (−)</option>
+            </select>
+          </div>
+          <div class="col-12 col-md-3">
+            <label class="form-label small fw-semibold">Amount (PKR)</label>
+            <input type="text" name="amount" class="form-control form-control-sm" placeholder="e.g. 2,500" inputmode="decimal" required>
+          </div>
+          <div class="col-12 col-md-5">
+            <label class="form-label small fw-semibold">Reason</label>
+            <input type="text" name="reason" class="form-control form-control-sm" placeholder="e.g. Cash dropped to safe" maxlength="300" required>
+          </div>
+          <div class="col-12 col-md-2">
+            <button type="submit" class="btn btn-sm btn-outline-primary w-100">
+              <i class="bi bi-plus-lg me-1"></i>Record
+            </button>
+          </div>
+        </form>
+
+        <% if (drawer.adjustments && drawer.adjustments.length) { %>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Time</th>
+                  <th>Direction</th>
+                  <th>Reason</th>
+                  <th>Recorded by</th>
+                  <th class="text-end">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% drawer.adjustments.forEach(function (row) { %>
+                  <tr>
+                    <td class="small text-muted"><%= formatDateTime(row.createdAt) %></td>
+                    <td>
+                      <span class="badge <%= row.kind === 'in' ? 'text-bg-success' : 'text-bg-danger' %>">
+                        <%= row.kind === 'in' ? 'Cash in' : 'Cash out' %>
+                      </span>
+                    </td>
+                    <td class="small"><%= row.reason %></td>
+                    <td class="small text-muted"><%= row.createdByName || '—' %></td>
+                    <td class="text-end font-monospace <%= row.kind === 'in' ? 'text-success' : 'text-danger' %>">
+                      <%= row.kind === 'in' ? '+' : '−' %><%= formatPKR(row.amountPaisa) %>
+                    </td>
+                  </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+        <% } else { %>
+          <div class="text-muted small fst-italic">No manual cash adjustments recorded for this drawer.</div>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Close drawer -->
+    <div class="card app-card mb-4 shadow-sm border-start border-4 border-success" id="closeDrawerCard">
+      <div class="card-header bg-success-subtle text-success-emphasis py-3">
+        <h2 class="h6 fw-bold mb-0"><i class="bi bi-lock me-2"></i>Close drawer &amp; sign off</h2>
+      </div>
+      <div class="card-body">
+        <div class="alert alert-light border small">
+          Count the physical notes and coins. If the count differs from the expected drawer balance,
+          a reason is mandatory and the difference is posted to <strong>6070 Cash Over &amp; Short</strong>.
+        </div>
+
+        <form method="POST" action="/accounting/daily-closing/close" id="closeDrawerForm" novalidate>
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input type="hidden" name="branch" value="<%= branch._id %>">
+          <input type="hidden" name="businessDate" value="<%= dateString %>">
+          <input type="hidden" name="returnTo" value="<%= returnTo %>">
+
+          <div class="row g-4">
+            <div class="col-12 col-lg-6">
+              <h3 class="h6 fw-semibold text-uppercase text-muted mb-2">Denomination count</h3>
+              <div class="table-responsive">
+                <table class="table table-sm align-middle mb-2">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Note / coin</th>
+                      <th class="text-end" style="width: 110px;">Count</th>
+                      <th class="text-end" style="width: 120px;">Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% denominations.forEach(function (d) { %>
+                      <tr>
+                        <td class="small"><%= d.label %></td>
+                        <td class="text-end">
+                          <input type="number" min="0" step="1" inputmode="numeric"
+                                 class="form-control form-control-sm text-end"
+                                 name="denom_<%= d.valuePaisa %>" data-denom="<%= d.valuePaisa %>"
+                                 placeholder="0">
+                        </td>
+                        <td class="text-end font-monospace small text-muted" data-denom-value="<%= d.valuePaisa %>">—</td>
+                      </tr>
+                    <% }); %>
+                  </tbody>
+                  <tfoot class="table-light">
+                    <tr class="fw-bold">
+                      <td>Denomination total</td>
+                      <td></td>
+                      <td class="text-end font-monospace" id="denomTotal">PKR 0</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <div class="form-text">Leave the grid blank if you only want to type the total below.</div>
+            </div>
+
+            <div class="col-12 col-lg-6">
+              <div class="mb-3">
+                <label for="countedCash" class="form-label fw-semibold">Counted cash in drawer (PKR) <span class="text-danger">*</span></label>
+                <input type="text" name="countedCash" id="countedCash" class="form-control form-control-lg font-monospace"
+                       inputmode="decimal" placeholder="0.00" required>
+                <div class="form-text">The denomination total fills this automatically when you enter counts.</div>
+              </div>
+
+              <div class="p-3 rounded border bg-light mb-3">
+                <div class="d-flex justify-content-between small">
+                  <span class="text-muted">Expected cash</span>
+                  <span class="font-monospace"><%= formatPKR(summary.expectedCashPaisa) %></span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mt-1">
+                  <span class="fw-semibold">Live variance</span>
+                  <span class="font-monospace fw-bold" id="closeVariance">PKR 0</span>
+                </div>
+              </div>
+
+              <div class="mb-3">
+                <label for="closedByName" class="form-label fw-semibold">Closing person's name <span class="text-danger">*</span></label>
+                <input type="text" name="closedByName" id="closedByName" class="form-control"
+                       value="<%= defaultCloser %>" maxlength="150" required>
+                <div class="form-text">Write the full name of the person physically closing the drawer.</div>
+              </div>
+
+              <div class="mb-3" id="varianceReasonWrap">
+                <label for="varianceReason" class="form-label fw-semibold">Variance reason</label>
+                <textarea name="varianceReason" id="varianceReason" class="form-control" rows="2" maxlength="500"
+                          placeholder="Required when counted cash differs from expected cash"></textarea>
+              </div>
+
+              <div class="mb-3">
+                <label for="closingNotes" class="form-label fw-semibold">Closing notes</label>
+                <textarea name="notes" id="closingNotes" class="form-control" rows="2" maxlength="1000"
+                          placeholder="Optional handover notes"></textarea>
+              </div>
+
+              <button type="submit" class="btn btn-success w-100">
+                <i class="bi bi-lock me-1"></i>Close drawer &amp; post variance
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  <% } %>
+
+  <% if (isClosed) { %>
+    <!-- Closed snapshot -->
+    <div class="card app-card mb-4 shadow-sm">
+      <div class="card-header bg-body-tertiary py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <h2 class="h6 fw-bold mb-0"><i class="bi bi-file-earmark-check me-2"></i>Closed drawer record</h2>
+        <div class="d-flex gap-2">
+          <a href="/accounting/daily-closing?branch=<%= branch._id %>&date=<%= dateString %>&format=pdf"
+             target="_blank" class="btn btn-sm btn-outline-danger">
+            <i class="bi bi-file-earmark-pdf me-1"></i>PDF sign-off
+          </a>
+          <% if (canReopen) { %>
+            <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#reopenDrawerModal">
+              <i class="bi bi-arrow-counterclockwise me-1"></i>Reopen
+            </button>
+          <% } %>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="row g-4">
+          <div class="col-12 col-md-6">
+            <div class="d-flex justify-content-between py-1 border-bottom">
+              <span class="text-muted small">Closing person</span>
+              <span class="fw-semibold"><%= drawer.closedByName || '—' %></span>
+            </div>
+            <div class="d-flex justify-content-between py-1 border-bottom">
+              <span class="text-muted small">Role</span>
+              <span><%= drawer.closedByRole || '—' %></span>
+            </div>
+            <div class="d-flex justify-content-between py-1 border-bottom">
+              <span class="text-muted small">Closed at</span>
+              <span><%= formatDateTime(drawer.closedAt) %></span>
+            </div>
+            <div class="d-flex justify-content-between py-1 border-bottom">
+              <span class="text-muted small">Counted cash</span>
+              <span class="font-monospace"><%= formatPKR(drawer.countedCashPaisa) %></span>
+            </div>
+            <div class="d-flex justify-content-between py-1 border-bottom">
+              <span class="text-muted small">Variance</span>
+              <span class="font-monospace fw-bold <%= variancePaisa === 0 ? 'text-success' : (variancePaisa > 0 ? 'text-warning-emphasis' : 'text-danger') %>">
+                <%= variancePaisa > 0 ? '+' : '' %><%= formatPKR(variancePaisa) %>
+              </span>
+            </div>
+            <% if (drawer.reopenHistory && drawer.reopenHistory.length) { %>
+              <div class="mt-3">
+                <div class="small fw-semibold text-uppercase text-muted mb-2">Reopen history</div>
+                <% drawer.reopenHistory.forEach(function (entry) { %>
+                  <div class="border rounded p-2 mb-2 small">
+                    <div class="d-flex justify-content-between">
+                      <span class="fw-semibold"><%= entry.reopenedByName || '—' %></span>
+                      <span class="text-muted"><%= formatDateTime(entry.reopenedAt) %></span>
+                    </div>
+                    <div class="text-muted"><%= entry.reason || 'No reason recorded.' %></div>
+                    <div class="text-muted">Previous variance: <span class="font-monospace"><%= formatPKR(entry.previousVariancePaisa) %></span></div>
+                  </div>
+                <% }); %>
+              </div>
+            <% } %>
+          </div>
+
+          <div class="col-12 col-md-6">
+            <div class="small fw-semibold text-uppercase text-muted mb-2">Denomination count</div>
+            <% if (drawer.denominations && drawer.denominations.length) { %>
+              <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Note / coin</th>
+                      <th class="text-end">Count</th>
+                      <th class="text-end">Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% drawer.denominations.forEach(function (row) { %>
+                      <tr>
+                        <td class="small"><%= row.label || formatPKR(row.valuePaisa) %></td>
+                        <td class="text-end"><%= row.count %></td>
+                        <td class="text-end font-monospace"><%= formatPKR(row.totalPaisa) %></td>
+                      </tr>
+                    <% }); %>
+                  </tbody>
+                  <tfoot class="table-light">
+                    <tr class="fw-bold">
+                      <td colspan="2">Total</td>
+                      <td class="text-end font-monospace"><%= formatPKR(drawer.countedCashPaisa) %></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            <% } else { %>
+              <div class="text-muted small fst-italic">No denomination breakdown was recorded.</div>
+            <% } %>
+          </div>
+        </div>
+      </div>
+    </div>
+  <% } %>
+
+  <% if (isOpen && summary && (summary.sales.length || summary.expenses.length)) { %>
+    <!-- Supporting movements -->
+    <div class="row g-4 mb-4">
+      <div class="col-12 col-xl-6">
+        <div class="card app-card shadow-sm h-100">
+          <div class="card-header bg-body-tertiary py-3">
+            <h2 class="h6 fw-bold mb-0"><i class="bi bi-receipt me-2"></i>POS receipts in this window</h2>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead class="table-light">
+                <tr><th>Sale</th><th>Method</th><th class="text-end">Paid</th></tr>
+              </thead>
+              <tbody>
+                <% summary.sales.forEach(function (sale) { %>
+                  <tr>
+                    <td class="small">
+                      <div class="fw-semibold"><%= sale.number %></div>
+                      <div class="text-muted"><%= sale.customerName || 'Walk-in' %></div>
+                    </td>
+                    <td><span class="badge text-bg-light border"><%= sale.paymentMethod %></span></td>
+                    <td class="text-end font-monospace"><%= formatPKR(sale.paidPaisa) %></td>
+                  </tr>
+                <% }); %>
+                <% if (!summary.sales.length) { %>
+                  <tr><td colspan="3" class="text-center text-muted py-3">No POS sales in this window.</td></tr>
+                <% } %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-xl-6">
+        <div class="card app-card shadow-sm h-100">
+          <div class="card-header bg-body-tertiary py-3">
+            <h2 class="h6 fw-bold mb-0"><i class="bi bi-wallet2 me-2"></i>Cash expenses in this window</h2>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead class="table-light">
+                <tr><th>Voucher</th><th>Payee</th><th class="text-end">Amount</th></tr>
+              </thead>
+              <tbody>
+                <% summary.expenses.forEach(function (expense) { %>
+                  <tr>
+                    <td class="small font-monospace"><%= expense.voucherNumber %></td>
+                    <td class="small"><%= expense.payee %></td>
+                    <td class="text-end font-monospace text-danger"><%= formatPKR(expense.amountPaisa) %></td>
+                  </tr>
+                <% }); %>
+                <% if (!summary.expenses.length) { %>
+                  <tr><td colspan="3" class="text-center text-muted py-3">No cash expenses in this window.</td></tr>
+                <% } %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  <% } %>
+<% } %>
+
+<!-- Recent drawer history -->
+<div class="card app-card shadow-sm mb-4">
+  <div class="card-header bg-body-tertiary py-3 d-flex justify-content-between align-items-center">
+    <h2 class="h6 fw-bold mb-0"><i class="bi bi-clock-history me-2"></i>Recent closings — <%= branch.code %></h2>
+    <span class="small text-muted">Last <%= history.length %> business days</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0 app-table">
+      <thead class="table-light">
+        <tr>
+          <th>Business date</th>
+          <th>Drawer</th>
+          <th>Status</th>
+          <th class="text-end">Expected</th>
+          <th class="text-end">Counted</th>
+          <th class="text-end">Variance</th>
+          <th>Closed by</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (history.length) { %>
+          <% history.forEach(function (row) { %>
+            <%
+              var rowKey = new Date(row.businessDate).toISOString().slice(0, 10);
+              var rowVariance = Number(row.variancePaisa || 0);
+              var isCurrent = rowKey === dateString;
+            %>
+            <tr class="<%= isCurrent ? 'table-active' : '' %>">
+              <td class="small fw-semibold"><%= formatDate(row.businessDate) %></td>
+              <td class="small font-monospace"><%= row.number %></td>
+              <td>
+                <span class="badge <%= row.status === 'closed' ? 'text-bg-success' : 'text-bg-warning' %>">
+                  <%= row.status === 'closed' ? 'Closed' : 'Open' %>
+                </span>
+              </td>
+              <td class="text-end font-monospace"><%= formatPKR(row.expectedCashPaisa) %></td>
+              <td class="text-end font-monospace"><%= formatPKR(row.countedCashPaisa) %></td>
+              <td class="text-end font-monospace <%= row.status !== 'closed' ? 'text-muted' : (rowVariance === 0 ? 'text-success' : (rowVariance > 0 ? 'text-warning-emphasis' : 'text-danger')) %>">
+                <%= row.status !== 'closed' ? '—' : (rowVariance > 0 ? '+' : '') + formatPKR(rowVariance) %>
+              </td>
+              <td class="small text-muted"><%= row.closedByName || '—' %></td>
+              <td class="text-end">
+                <a href="/accounting/daily-closing?branch=<%= branch._id %>&date=<%= rowKey %>" class="btn btn-sm btn-outline-secondary">
+                  View
+                </a>
+              </td>
+            </tr>
+          <% }); %>
+        <% } else { %>
+          <tr>
+            <td colspan="8" class="text-center py-4 text-muted">No drawers have been opened for this branch yet.</td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<% if (isClosed && canReopen) { %>
+  <!-- Reopen modal -->
+  <div class="modal fade" id="reopenDrawerModal" tabindex="-1" aria-labelledby="reopenDrawerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <form method="POST" action="/accounting/daily-closing/reopen">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input type="hidden" name="branch" value="<%= branch._id %>">
+          <input type="hidden" name="businessDate" value="<%= dateString %>">
+          <input type="hidden" name="returnTo" value="<%= returnTo %>">
+          <div class="modal-header">
+            <h5 class="modal-title fw-bold" id="reopenDrawerModalLabel">
+              <i class="bi bi-arrow-counterclockwise text-warning me-2"></i>Reopen <%= drawer.number %>
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="alert alert-warning small">
+              Reopening clears the physical count and reverses any variance journal entry.
+              The previous close is kept in the audit history. Only the latest closed drawer for this branch can be reopened.
+            </div>
+            <label for="reopenReason" class="form-label fw-semibold">Reason for reopening <span class="text-danger">*</span></label>
+            <textarea name="reason" id="reopenReason" class="form-control" rows="3" maxlength="500" required
+                      placeholder="Explain what was wrong with the close and what will be corrected"></textarea>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-warning">
+              <i class="bi bi-arrow-counterclockwise me-1"></i>Reopen drawer
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+<% } %>
+
+<% if (isOpen && canManage) { %>
+  <script>
+    (function () {
+      var form = document.getElementById('closeDrawerForm');
+      if (!form) return;
+      var expected = <%= expectedPaisa %> / 100;
+      var countedInput = document.getElementById('countedCash');
+      var totalEl = document.getElementById('denomTotal');
+      var varianceEl = document.getElementById('closeVariance');
+      var reasonWrap = document.getElementById('varianceReasonWrap');
+      var reasonInput = document.getElementById('varianceReason');
+      var denomInputs = form.querySelectorAll('[data-denom]');
+      var valueCells = form.querySelectorAll('[data-denom-value]');
+
+      function money(value) {
+        return 'PKR ' + Number(value || 0).toLocaleString('en-PK', {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 2
+        });
+      }
+
+      function parseAmount(value) {
+        var n = parseFloat(String(value || '').replace(/,/g, ''));
+        return isFinite(n) ? n : 0;
+      }
+
+      function updateValueCells() {
+        Array.prototype.forEach.call(denomInputs, function (input) {
+          var valuePaisa = Number(input.getAttribute('data-denom'));
+          var count = parseInt(input.value, 10);
+          if (!isFinite(count) || count < 0) count = 0;
+          var cell = form.querySelector('[data-denom-value="' + valuePaisa + '"]');
+          if (cell) {
+            cell.textContent = count > 0 ? money((valuePaisa * count) / 100) : '—';
+          }
+        });
+      }
+
+      function recalc(fromDenominations) {
+        var totalPaisa = 0;
+        var anyCount = false;
+        Array.prototype.forEach.call(denomInputs, function (input) {
+          var count = parseInt(input.value, 10);
+          if (!isFinite(count) || count <= 0) return;
+          anyCount = true;
+          totalPaisa += Number(input.getAttribute('data-denom')) * count;
+        });
+
+        if (totalEl) totalEl.textContent = money(totalPaisa / 100);
+        updateValueCells();
+
+        if (fromDenominations && anyCount) {
+          countedInput.value = (totalPaisa / 100).toFixed(2).replace(/\.00$/, '');
+        }
+
+        var counted = parseAmount(countedInput.value);
+        var variance = Math.round((counted - expected) * 100) / 100;
+        if (varianceEl) {
+          varianceEl.textContent = (variance > 0 ? '+' : '') + money(variance);
+          varianceEl.className = 'font-monospace fw-bold ' +
+            (variance === 0 ? 'text-success' : (variance > 0 ? 'text-warning-emphasis' : 'text-danger'));
+        }
+        if (reasonWrap) reasonWrap.classList.toggle('d-none', variance === 0);
+        if (reasonInput) reasonInput.required = variance !== 0;
+      }
+
+      Array.prototype.forEach.call(denomInputs, function (input) {
+        input.addEventListener('input', function () { recalc(true); });
+      });
+      countedInput.addEventListener('input', function () { recalc(false); });
+      recalc(false);
+    })();
+  </script>
+<% } %>

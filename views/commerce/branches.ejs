@@ -1,0 +1,10 @@
+<%- include('../partials/page-header', { heading: branchSession ? 'Branch' : 'Branches & Shops', subheading: branchSession ? 'Your branch location and its stock.' : 'Company locations, assigned staff and branch inventory.', actions: can('branches.manage') ? [{ label: 'Add branch', url: '/branches/new', icon: 'bi-plus-lg', class: 'btn-primary' }] : [] }) %>
+<div class="row g-3 mt-1">
+  <% branches.forEach(function(branch) { %>
+    <div class="col-12 col-md-6 col-xl-4"><div class="card app-card h-100"><div class="card-body">
+      <div class="d-flex justify-content-between"><div><span class="badge text-bg-<%= branch.type === 'main' ? 'primary' : 'light border' %>"><%= branch.code %></span><h2 class="h5 mt-2 mb-1"><%= branch.name %></h2></div><span class="badge text-bg-<%= branch.isActive ? 'success' : 'secondary' %>"><%= branch.isActive ? 'Active' : 'Inactive' %></span></div>
+      <div class="small text-muted"><%= [branch.address, branch.city].filter(Boolean).join(', ') || 'No address' %></div>
+      <div class="small mt-2"><i class="bi bi-person me-1"></i><%= branch.manager ? branch.manager.name : 'No manager assigned' %> · <%= branch.userCount %> user(s)</div>
+    </div><div class="card-footer bg-transparent d-flex gap-2"><a class="btn btn-sm btn-primary" href="/branches/<%= branch._id %>/stock">View stock</a><% if (can('branches.manage')) { %><a class="btn btn-sm btn-outline-secondary" href="/branches/<%= branch._id %>/edit">Edit</a><% } %></div></div></div>
+  <% }); %>
+</div>

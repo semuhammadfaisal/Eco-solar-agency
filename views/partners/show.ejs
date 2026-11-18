@@ -1,0 +1,297 @@
+<%
+  var headerActions = [];
+  if (can('partners.manage')) {
+    headerActions.push({ label: 'Edit partner', url: '/partners/' + partner._id + '/edit', icon: 'bi-pencil', class: 'btn-primary' });
+  }
+  headerActions.push({ label: 'Back to partners', url: '/partners', icon: 'bi-arrow-left', class: 'btn-outline-secondary' });
+
+  var periodLabel = period.all
+    ? 'All time'
+    : formatDate(period.from) + ' – ' + formatDate(period.to);
+  var netProfitPaisa = Number(pnl.netProfitPaisa || 0);
+  var canRecord = can('partners.transactions') && partner.isActive;
+%>
+
+<%- include('../partials/page-header', {
+  heading: partner.name,
+  subheading: partner.code + ' · ' + Number((partner.equityBps / 100).toFixed(2)) + '% equity' + (partner.isActive ? '' : ' · inactive'),
+  actions: headerActions
+}) %>
+
+<div class="card app-card mt-3">
+  <div class="card-body py-2">
+    <form method="GET" action="/partners/<%= partner._id %>" class="row g-2 align-items-end">
+      <div class="col-6 col-md-3">
+        <label for="from" class="form-label small text-muted mb-1">Profit from</label>
+        <input type="date" class="form-control form-control-sm" id="from" name="from"
+               value="<%= period.all ? '' : period.from %>"<%= period.all ? ' disabled' : '' %>>
+      </div>
+      <div class="col-6 col-md-3">
+        <label for="to" class="form-label small text-muted mb-1">Profit to</label>
+        <input type="date" class="form-control form-control-sm" id="to" name="to"
+               value="<%= period.all ? '' : period.to %>"<%= period.all ? ' disabled' : '' %>>
+      </div>
+      <div class="col-12 col-md-4 d-flex gap-2">
+        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel me-1"></i>Apply</button>
+        <a href="/partners/<%= partner._id %>" class="btn btn-sm btn-outline-secondary">This month</a>
+        <a href="/partners/<%= partner._id %>?all=1" class="btn btn-sm btn-outline-secondary">All time</a>
+      </div>
+      <div class="col-12 col-md-2 text-md-end small text-muted">
+        <%= periodLabel %>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="row g-3 mt-1">
+  <div class="col-6 col-xl-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-primary-subtle text-primary"><i class="bi bi-pie-chart"></i></span>
+      <div class="stat-value"><%= Number((partner.equityBps / 100).toFixed(2)) %>%</div>
+      <div class="stat-label">Equity share</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-success-subtle text-success"><i class="bi bi-graph-up-arrow"></i></span>
+      <div class="stat-value <%= profitSharePaisa < 0 ? 'text-danger' : '' %>"><%= formatPKR(profitSharePaisa, { decimals: 2 }) %></div>
+      <div class="stat-label">Profit share · <%= period.all ? 'all time' : 'selected period' %></div>
+    </div></div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-info-subtle text-info"><i class="bi bi-wallet2"></i></span>
+      <div class="stat-value"><%= formatPKR(totals.netPositionPaisa) %></div>
+      <div class="stat-label">Net partner position</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-secondary-subtle text-secondary-emphasis"><i class="bi bi-receipt"></i></span>
+      <div class="stat-value"><%= totals.transactionCount %></div>
+      <div class="stat-label">Cash records</div>
+    </div></div>
+  </div>
+</div>
+
+<div class="row g-3 mt-1">
+  <div class="col-12 col-xl-7">
+    <div class="card app-card">
+      <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">Partner details</h2></div>
+      <div class="card-body p-4">
+        <dl class="row mb-0 small">
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Code</dt>
+          <dd class="col-7 col-sm-8 font-monospace"><%= partner.code %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Phone</dt>
+          <dd class="col-7 col-sm-8"><%= partner.phone || '—' %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Email</dt>
+          <dd class="col-7 col-sm-8"><%= partner.email || '—' %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">CNIC</dt>
+          <dd class="col-7 col-sm-8 font-monospace"><%= partner.cnic || '—' %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Address</dt>
+          <dd class="col-7 col-sm-8"><%= partner.address || '—' %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Partner since</dt>
+          <dd class="col-7 col-sm-8"><%= formatDate(partner.joinedAt) %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Status</dt>
+          <dd class="col-7 col-sm-8">
+            <%- partner.isActive
+              ? '<span class="badge text-bg-success">Active</span>'
+              : '<span class="badge text-bg-secondary">Inactive</span>' %>
+          </dd>
+        </dl>
+
+        <% if (partner.notes) { %>
+          <hr class="my-4">
+          <h3 class="h6 fw-semibold text-uppercase text-muted mb-2">Notes</h3>
+          <p class="small mb-0" style="white-space:pre-line"><%= partner.notes %></p>
+        <% } %>
+      </div>
+    </div>
+
+    <div class="card app-card mt-3">
+      <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+        <h2 class="h6 fw-semibold mb-0">Cash records</h2>
+        <span class="small text-muted"><%= totals.transactionCount %> record<%= totals.transactionCount === 1 ? '' : 's' %></span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle app-table mb-0">
+          <thead>
+            <tr>
+              <th>Reference</th>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Account</th>
+              <th class="text-end">Amount</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!transactions.length) { %>
+              <tr>
+                <td colspan="6" class="text-center py-4 text-muted">
+                  No cash records yet. Record capital in, cash taken or an expense paid by this partner.
+                </td>
+              </tr>
+            <% } else { %>
+              <% transactions.forEach(function (tx) { %>
+                <tr>
+                  <td class="font-monospace small"><%= tx.reference %></td>
+                  <td class="small text-muted"><%= formatDate(tx.date) %></td>
+                  <td>
+                    <span class="badge text-bg-<%= partnerConfig.PARTNER_TRANSACTION_BADGES[tx.type] || 'secondary' %>">
+                      <%= partnerConfig.PARTNER_TRANSACTION_LABELS[tx.type] || tx.type %>
+                    </span>
+                  </td>
+                  <td class="small">
+                    <%= tx.accountName || '—' %>
+                    <div class="text-muted font-monospace"><%= tx.accountCode %></div>
+                  </td>
+                  <td class="text-end small fw-semibold"><%= formatPKR(tx.amountPaisa, { decimals: 2 }) %></td>
+                  <td class="small text-muted">
+                    <%= tx.notes || '—' %>
+                    <% if (tx.recordedBy && tx.recordedBy.name) { %>
+                      <div class="text-muted">by <%= tx.recordedBy.name %></div>
+                    <% } %>
+                  </td>
+                </tr>
+              <% }); %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-5">
+    <div class="card app-card bg-light-subtle">
+      <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">Partner account</h2></div>
+      <div class="card-body">
+        <div class="d-flex justify-content-between py-1 small"><span class="text-muted">Capital in</span><span>+ <%= formatPKR(totals.contributionPaisa) %></span></div>
+        <div class="d-flex justify-content-between py-1 small"><span class="text-muted">Expenses paid by partner</span><span>+ <%= formatPKR(totals.expensePaisa) %></span></div>
+        <div class="d-flex justify-content-between py-1 small"><span class="text-muted">Cash taken</span><span>− <%= formatPKR(totals.drawingPaisa) %></span></div>
+        <hr>
+        <div class="d-flex justify-content-between fw-semibold"><span>Net position</span><span><%= formatPKR(totals.netPositionPaisa) %></span></div>
+        <div class="d-flex justify-content-between small text-muted mt-2"><span>Profit share</span><span><%= formatPKR(profitSharePaisa, { decimals: 2 }) %></span></div>
+      </div>
+    </div>
+
+    <% if (canRecord) { %>
+      <div class="card app-card mt-3">
+        <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">Record a cash movement</h2></div>
+        <div class="card-body">
+          <form method="POST" action="/partners/<%= partner._id %>/transactions" novalidate>
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+            <div class="mb-3">
+              <label for="type" class="form-label">What happened? <span class="text-danger">*</span></label>
+              <select class="form-select" id="type" name="type" required>
+                <% partnerConfig.PARTNER_TRANSACTION_TYPES.forEach(function (type) { %>
+                  <option value="<%= type %>"<%= type === 'drawing' ? ' selected' : '' %>>
+                    <%= partnerConfig.PARTNER_TRANSACTION_LABELS[type] %>
+                  </option>
+                <% }); %>
+              </select>
+              <div class="form-text" id="typeHint"><%= partnerConfig.PARTNER_TRANSACTION_HINTS.drawing %></div>
+            </div>
+
+            <div class="row g-3">
+              <div class="col-12 col-md-6">
+                <label for="amount" class="form-label">Amount (PKR) <span class="text-danger">*</span></label>
+                <div class="input-group">
+                  <span class="input-group-text">PKR</span>
+                  <input type="number" step="0.01" min="0.01" class="form-control" id="amount"
+                         name="amount" required placeholder="1000.00">
+                </div>
+              </div>
+
+              <div class="col-12 col-md-6">
+                <label for="date" class="form-label">Date</label>
+                <input type="date" class="form-control" id="date" name="date" value="<%= today %>">
+              </div>
+
+              <div class="col-12" id="paymentAccountWrap">
+                <label for="paymentAccountCode" class="form-label">Paid from / into</label>
+                <select class="form-select" id="paymentAccountCode" name="paymentAccountCode">
+                  <% partnerConfig.PARTNER_PAYMENT_ACCOUNTS.forEach(function (account) { %>
+                    <option value="<%= account.code %>"><%= account.label %></option>
+                  <% }); %>
+                </select>
+              </div>
+
+              <div class="col-12 d-none" id="expenseAccountWrap">
+                <label for="expenseAccountCode" class="form-label">Expense category</label>
+                <select class="form-select" id="expenseAccountCode" name="expenseAccountCode">
+                  <% expenseCategories.forEach(function (category) { %>
+                    <option value="<%= category.code %>"><%= category.code %> · <%= category.name %></option>
+                  <% }); %>
+                </select>
+              </div>
+
+              <div class="col-12">
+                <label for="notes" class="form-label">Notes</label>
+                <input type="text" class="form-control" id="notes" name="notes" maxlength="500"
+                       placeholder="Reason or reference (optional)">
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100 mt-3">
+              <i class="bi bi-plus-circle me-1"></i>Save cash record
+            </button>
+            <div class="form-text text-center mt-2">
+              Every cash record posts a balanced journal entry automatically.
+            </div>
+          </form>
+        </div>
+      </div>
+    <% } else if (!partner.isActive) { %>
+      <div class="alert alert-warning small mt-3 mb-0">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        This partner is inactive. Activate the partner before recording cash movements.
+      </div>
+    <% } %>
+
+    <% if (can('partners.manage')) { %>
+      <div class="card app-card border-danger-subtle mt-3">
+        <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0 text-danger">Danger zone</h2></div>
+        <div class="card-body">
+          <p class="small text-muted mb-2">
+            A partner with cash records cannot be deleted. Mark the partner inactive instead so
+            the ledger history stays intact.
+          </p>
+          <button type="button" class="btn btn-outline-danger btn-sm"
+                  data-delete-url="/partners/<%= partner._id %>"
+                  data-delete-name="<%= partner.name %>">
+            <i class="bi bi-trash me-1"></i>Delete partner
+          </button>
+        </div>
+      </div>
+    <% } %>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var type = document.getElementById('type');
+    if (!type) return;
+    var hint = document.getElementById('typeHint');
+    var paymentWrap = document.getElementById('paymentAccountWrap');
+    var expenseWrap = document.getElementById('expenseAccountWrap');
+    var hints = <%- JSON.stringify(partnerConfig.PARTNER_TRANSACTION_HINTS) %>;
+
+    function sync() {
+      var isExpense = type.value === 'expense';
+      if (paymentWrap) paymentWrap.classList.toggle('d-none', isExpense);
+      if (expenseWrap) expenseWrap.classList.toggle('d-none', !isExpense);
+      if (hint) hint.textContent = hints[type.value] || '';
+    }
+
+    type.addEventListener('change', sync);
+    sync();
+  })();
+</script>

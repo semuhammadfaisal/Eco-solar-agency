@@ -1,0 +1,160 @@
+<%
+  var oldReceived = oldInput && Array.isArray(oldInput.received) ? oldInput.received : [];
+  var oldSerials = oldInput && Array.isArray(oldInput.serials) ? oldInput.serials : [];
+  var lines = (purchase.items || []).filter(function (line) {
+    return Number(line.qty || 0) - Number(line.receivedQty || 0) > 0;
+  });
+%>
+
+<%- include('../partials/page-header', {
+  heading: 'Receive stock — ' + purchase.number,
+  subheading: (purchase.supplier ? purchase.supplier.name : 'Supplier') + ' · post a GRN against this purchase order',
+  actions: [
+    { label: 'Back to purchase', url: '/purchases/' + purchase._id, icon: 'bi-arrow-left', class: 'btn-outline-secondary' }
+  ]
+}) %>
+
+<div class="row g-3 g-lg-4 mt-1">
+  <div class="col-12 col-xl-9">
+    <div class="card app-card">
+      <div class="card-body p-4">
+        <%- include('../partials/form-errors') %>
+
+        <form method="POST" action="/purchases/<%= purchase._id %>/receive" data-receive-form data-once novalidate>
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+          <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Receipt details</h2>
+          <div class="row g-3">
+            <div class="col-6 col-md-3">
+              <label for="receivedAt" class="form-label">Received date <span class="text-danger">*</span></label>
+              <input type="date" class="form-control" id="receivedAt" name="receivedAt"
+                     value="<%= oldInput.receivedAt || today %>" required>
+            </div>
+            <div class="col-6 col-md-3">
+              <label for="branch" class="form-label">Receiving branch <span class="text-danger">*</span></label>
+              <select class="form-select" id="branch" name="branch" required><% branches.forEach(function(branch){ %><option value="<%= branch._id %>" <%= purchase.branch && String(purchase.branch) === String(branch._id) ? 'selected' : '' %>><%= branch.code %> — <%= branch.name %></option><% }) %></select>
+            </div>
+            <div class="col-6 col-md-3">
+              <label for="location" class="form-label">Location</label>
+              <input type="text" class="form-control" id="location" name="location"
+                     value="<%= old('location') %>" maxlength="100" placeholder="Main warehouse">
+            </div>
+            <div class="col-12 col-md-3">
+              <label for="invoiceNo" class="form-label">Supplier invoice no.</label>
+              <input type="text" class="form-control" id="invoiceNo" name="invoiceNo"
+                     value="<%= old('invoiceNo', purchase.invoiceNo || '') %>" maxlength="60">
+            </div>
+          </div>
+
+          <hr class="my-4">
+
+          <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-2">
+            <h2 class="h6 fw-semibold text-uppercase text-muted mb-0">Quantities received</h2>
+            <span class="badge text-bg-light border">Serial numbers must match the received quantity exactly</span>
+          </div>
+
+          <% if (!lines.length) { %>
+            <div class="alert alert-info mb-0">Every line on this order has already been received.</div>
+          <% } else { %>
+            <% lines.forEach(function (line) {
+                 var index = purchase.items.indexOf(line);
+                 var remaining = Number(line.qty || 0) - Number(line.receivedQty || 0);
+                 var lineSerials = serialsByLine && serialsByLine.get(String(line.item)) ? serialsByLine.get(String(line.item)) : [];
+            %>
+              <div class="border rounded p-3 mb-3" data-receive-line>
+                <div class="d-flex flex-wrap gap-2 justify-content-between align-items-start">
+                  <div>
+                    <div class="fw-semibold"><%= line.name || line.sku %></div>
+                    <div class="text-muted small">
+                      <span class="font-monospace"><%= line.sku %></span>
+                      · <%= formatPKR(line.unitCostPaisa) %> per <%= line.unit %>
+                      <% if (line.hasSerial) { %><span class="badge text-bg-info-subtle text-info-emphasis ms-1">Serial tracked</span><% } %>
+                    </div>
+                  </div>
+                  <div class="text-end small">
+                    <div>Ordered <strong><%= formatQty(line.qty) %></strong></div>
+                    <div class="text-muted">Already received <%= formatQty(line.receivedQty) %></div>
+                    <div class="text-warning-emphasis fw-semibold">Remaining <%= formatQty(remaining) %></div>
+                  </div>
+                </div>
+
+                <div class="row g-3 align-items-start mt-1">
+                  <div class="col-6 col-md-4">
+                    <label class="form-label small text-muted mb-1" for="received-<%= index %>">Receive now</label>
+                    <div class="input-group">
+                      <input type="number" class="form-control" id="received-<%= index %>"
+                             name="received[<%= index %>]" value="<%= oldReceived[index] !== undefined ? oldReceived[index] : '' %>"
+                             min="0" max="<%= remaining %>"
+                             step="<%= line.hasSerial ? '1' : 'any' %>"
+                             inputmode="decimal" placeholder="0"
+                             data-receive-qty data-serial-line="<%= line.hasSerial ? '1' : '0' %>">
+                      <span class="input-group-text"><%= line.unit %></span>
+                    </div>
+                    <div class="form-text">Leave blank or zero to skip this line.</div>
+                  </div>
+
+                  <% if (line.hasSerial) { %>
+                    <div class="col-12 col-md-8">
+                      <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-1">
+                        <label class="form-label small text-muted mb-0" for="serials-<%= index %>">Serial numbers</label>
+                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                          <span class="badge text-bg-light border" data-serial-count data-serial-count-for="<%= index %>">0 entered</span>
+                          <label class="btn btn-sm btn-outline-secondary mb-0">
+                            <i class="bi bi-upload me-1"></i>Import CSV
+                            <input type="file" accept=".csv,.txt" class="d-none" data-serial-file data-serial-target="serials-<%= index %>">
+                          </label>
+                        </div>
+                      </div>
+                      <textarea class="form-control font-monospace" id="serials-<%= index %>"
+                                name="serials[<%= index %>]" rows="4"
+                                placeholder="One serial per line, or paste a CSV column"
+                                data-serial-input data-serial-expected="<%= index %>"><%= oldSerials[index] !== undefined ? oldSerials[index] : '' %></textarea>
+                      <div class="form-text">
+                        Exactly the received quantity is required.
+                        <% if (lineSerials.length) { %>
+                          This line already has <%= lineSerials.length %> serial<%= lineSerials.length === 1 ? '' : 's' %> on record.
+                        <% } %>
+                      </div>
+                    </div>
+                  <% } %>
+                </div>
+              </div>
+            <% }); %>
+          <% } %>
+
+          <div class="mt-4">
+            <label for="notes" class="form-label">Receipt notes</label>
+            <textarea class="form-control" id="notes" name="notes" rows="2" maxlength="500"
+                      placeholder="Condition on arrival, shortage, damage…"><%= old('notes') %></textarea>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2 justify-content-end mt-4">
+            <a href="/purchases/<%= purchase._id %>" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary" <%= lines.length ? '' : 'disabled' %>>
+              <i class="bi bi-box-arrow-in-down me-1"></i>Post GRN
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-3">
+    <div class="card app-card bg-light-subtle">
+      <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">What this does</h2></div>
+      <div class="card-body small text-muted">
+        <ul class="ps-3 mb-3">
+          <li class="mb-2">Writes a signed <strong>IN</strong> movement per received line.</li>
+          <li class="mb-2">Updates the item's stock and moving-average cost.</li>
+          <li class="mb-2">Creates one serial record per serialised unit, stamped with the item's warranty defaults.</li>
+          <li class="mb-0">Marks the PO <strong>partial</strong> or <strong>received</strong> based on the remaining quantities.</li>
+        </ul>
+        <div class="alert alert-light border small mb-0 py-2">
+          <i class="bi bi-exclamation-triangle me-1"></i>A GRN cannot be edited after posting. Check the serials before submitting.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/inventory.js"></script>

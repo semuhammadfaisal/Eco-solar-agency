@@ -1,0 +1,199 @@
+<%- include('../partials/page-header', {
+  heading: 'Installment Collection Calendar',
+  subheading: 'Visual repayment timeline color-coded by payment stage with click-to-collect workflow.',
+  actions: [
+    { label: 'Installment plans', url: '/installments', icon: 'bi-calendar3-range', class: 'btn-outline-primary' },
+    { label: 'Cheque vault', url: '/installments/cheques', icon: 'bi-journal-check', class: 'btn-outline-secondary' },
+    { label: 'Receipts', url: '/installments/receipts', icon: 'bi-receipt-cutoff', class: 'btn-outline-secondary' }
+  ]
+}) %>
+
+<!-- Color-Coded Legend & Filters Card -->
+<div class="card app-card mb-3">
+  <div class="card-body p-3">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3 pb-3 border-bottom">
+      <div class="d-flex flex-wrap align-items-center gap-3 small">
+        <span class="fw-semibold text-muted text-uppercase">Legend:</span>
+        <span class="badge text-bg-warning px-2 py-1"><i class="bi bi-clock-history me-1"></i>Due Today</span>
+        <span class="badge text-bg-primary px-2 py-1"><i class="bi bi-calendar-event me-1"></i>Upcoming</span>
+        <span class="badge px-2 py-1" style="background-color:#6f42c1;color:#fff;"><i class="bi bi-hourglass-split me-1"></i>Partially Paid</span>
+        <span class="badge text-bg-danger px-2 py-1"><i class="bi bi-exclamation-octagon me-1"></i>Overdue</span>
+        <span class="badge text-bg-success px-2 py-1"><i class="bi bi-check-circle me-1"></i>Paid</span>
+      </div>
+
+      <div class="small text-muted">
+        <i class="bi bi-info-circle me-1"></i>Click on any scheduled installment to view details or collect payment.
+      </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="row g-2 align-items-center">
+      <div class="col-12 col-md-4">
+        <select class="form-select" id="calendarCustomerFilter">
+          <option value="">All Customers</option>
+          <% customers.forEach(function (c) { %>
+            <option value="<%= c._id %>"><%= c.name %> (<%= c.code %>) · <%= c.city || '' %></option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div class="col-6 col-md-3">
+        <select class="form-select" id="calendarStatusFilter">
+          <option value="">All Statuses</option>
+          <option value="pending">Pending</option>
+          <option value="overdue">Overdue</option>
+          <option value="partial">Partially Paid</option>
+          <option value="paid">Paid</option>
+        </select>
+      </div>
+
+      <div class="col-6 col-md-3">
+        <button type="button" class="btn btn-outline-primary w-100" id="calendarRefreshBtn">
+          <i class="bi bi-arrow-clockwise me-1"></i>Apply Filters
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FullCalendar Surface Card -->
+<div class="card app-card">
+  <div class="card-body p-3 p-md-4">
+    <div id="calendar" style="min-height: 650px;"></div>
+  </div>
+</div>
+
+<!-- Offcanvas for Installment Details & One-Click Payment -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="installmentDetailOffcanvas" aria-labelledby="installmentOffcanvasLabel">
+  <div class="offcanvas-header border-bottom">
+    <h5 class="offcanvas-title" id="installmentOffcanvasLabel">Installment Details</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+  </div>
+  <div class="offcanvas-body">
+    <div class="text-center py-2 mb-3 bg-light rounded border">
+      <span class="text-muted small text-uppercase fw-semibold">Installment Tranche</span>
+      <h3 class="h4 fw-bold text-primary mb-0" id="offcanvasTitle">#1</h3>
+      <span class="badge" id="offcanvasBadge">Upcoming</span>
+    </div>
+
+    <dl class="row small mb-3">
+      <dt class="col-5 text-muted fw-normal">Customer</dt>
+      <dd class="col-7 fw-semibold" id="offcanvasCustomer">—</dd>
+
+      <dt class="col-5 text-muted fw-normal">Phone</dt>
+      <dd class="col-7" id="offcanvasPhone">—</dd>
+
+      <dt class="col-5 text-muted fw-normal">City / Area</dt>
+      <dd class="col-7" id="offcanvasCity">—</dd>
+
+      <dt class="col-5 text-muted fw-normal">Due Date</dt>
+      <dd class="col-7 fw-bold" id="offcanvasDueDate">—</dd>
+
+      <dt class="col-5 text-muted fw-normal">Installment Due</dt>
+      <dd class="col-7 font-monospace fw-bold text-dark" id="offcanvasDueAmount">PKR 0</dd>
+
+      <dt class="col-5 text-muted fw-normal">Paid Amount</dt>
+      <dd class="col-7 font-monospace text-success" id="offcanvasPaidAmount">PKR 0</dd>
+
+      <dt class="col-5 text-muted fw-normal">Balance Remaining</dt>
+      <dd class="col-7 font-monospace fw-bold text-danger" id="offcanvasBalance">PKR 0</dd>
+
+      <dt class="col-5 text-muted fw-normal">Plan Number</dt>
+      <dd class="col-7 font-monospace" id="offcanvasPlanNumber">—</dd>
+    </dl>
+
+    <div class="d-grid gap-2 mt-4 pt-3 border-top">
+      <a href="#" id="offcanvasCollectBtn" class="btn btn-primary btn-lg">
+        <i class="bi bi-cash-coin me-1"></i>Open Plan &amp; Collect Payment
+      </a>
+      <a href="#" id="offcanvasPlanBtn" class="btn btn-outline-secondary">
+        <i class="bi bi-eye me-1"></i>View Full Plan
+      </a>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const calendarEl = document.getElementById('calendar');
+  const offcanvasEl = document.getElementById('installmentDetailOffcanvas');
+  const bsOffcanvas = new bootstrap.Offcanvas(offcanvasEl);
+
+  const customerSelect = document.getElementById('calendarCustomerFilter');
+  const statusSelect = document.getElementById('calendarStatusFilter');
+  const refreshBtn = document.getElementById('calendarRefreshBtn');
+
+  const calendar = new FullCalendar.Calendar(calendarEl, {
+    initialView: 'dayGridMonth',
+    headerToolbar: {
+      left: 'prev,next today',
+      center: 'title',
+      right: 'dayGridMonth,timeGridWeek,listMonth'
+    },
+    buttonText: {
+      today: 'Today',
+      month: 'Month',
+      week: 'Week',
+      list: 'List'
+    },
+    events: function (info, successCallback, failureCallback) {
+      const customer = customerSelect.value;
+      const status = statusSelect.value;
+      const url = `/installments/calendar/events?start=${encodeURIComponent(info.startStr)}&end=${encodeURIComponent(info.endStr)}&customer=${encodeURIComponent(customer)}&status=${encodeURIComponent(status)}`;
+
+      fetch(url)
+        .then(response => response.json())
+        .then(data => successCallback(data))
+        .catch(err => failureCallback(err));
+    },
+    eventClick: function (info) {
+      const props = info.event.extendedProps;
+
+      document.getElementById('offcanvasTitle').textContent = `Installment #${props.installmentNumber}`;
+      document.getElementById('offcanvasCustomer').textContent = props.customerName;
+      document.getElementById('offcanvasPhone').textContent = props.customerPhone || '—';
+      document.getElementById('offcanvasCity').textContent = props.customerCity || '—';
+      document.getElementById('offcanvasDueDate').textContent = info.event.startStr;
+      document.getElementById('offcanvasDueAmount').textContent = 'PKR ' + Math.round(props.amountPaisa / 100).toLocaleString('en-PK');
+      document.getElementById('offcanvasPaidAmount').textContent = 'PKR ' + Math.round(props.paidAmountPaisa / 100).toLocaleString('en-PK');
+      document.getElementById('offcanvasBalance').textContent = 'PKR ' + Math.round(props.dueAmountPaisa / 100).toLocaleString('en-PK');
+      document.getElementById('offcanvasPlanNumber').textContent = props.planNumber;
+
+      const badge = document.getElementById('offcanvasBadge');
+      badge.textContent = props.statusLabel;
+      if (props.status === 'paid') {
+        badge.className = 'badge text-bg-success';
+      } else if (props.status === 'overdue') {
+        badge.className = 'badge text-bg-danger';
+      } else if (props.status === 'partial') {
+        badge.className = 'badge';
+        badge.style.backgroundColor = '#6f42c1';
+        badge.style.color = '#fff';
+      } else if (props.statusLabel === 'Due Today') {
+        badge.className = 'badge';
+        badge.style.backgroundColor = '#fd7e14';
+        badge.style.color = '#fff';
+      } else {
+        badge.className = 'badge text-bg-primary';
+      }
+
+      document.getElementById('offcanvasCollectBtn').href = `/installments/${props.planId}`;
+      document.getElementById('offcanvasPlanBtn').href = `/installments/${props.planId}`;
+
+      bsOffcanvas.show();
+    }
+  });
+
+  calendar.render();
+
+  refreshBtn.addEventListener('click', function () {
+    calendar.refetchEvents();
+  });
+  customerSelect.addEventListener('change', function () {
+    calendar.refetchEvents();
+  });
+  statusSelect.addEventListener('change', function () {
+    calendar.refetchEvents();
+  });
+});
+</script>

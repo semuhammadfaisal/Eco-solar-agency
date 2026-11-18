@@ -1,0 +1,133 @@
+<%- include('../partials/page-header', {
+  heading: 'Users',
+  subheading: 'Staff accounts, roles and access. Only owners can manage users.',
+  actions: [
+    { label: 'Branch logins', url: '/users/branch-logins', icon: 'bi-shop', class: 'btn-outline-secondary' },
+    { label: 'Add user', url: '/users/new', icon: 'bi-person-plus', class: 'btn-primary' }
+  ]
+}) %>
+
+<div class="card app-card mt-3">
+  <div class="card-body border-bottom">
+    <form method="GET" action="/users" class="row g-2 align-items-end">
+      <div class="col-12 col-md-5">
+        <label for="search" class="form-label small text-muted mb-1">Search</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="search" class="form-control" id="search" name="search"
+                 value="<%= filters.search %>" placeholder="Name, email or phone">
+        </div>
+      </div>
+
+      <div class="col-6 col-md-2">
+        <label for="role" class="form-label small text-muted mb-1">Role</label>
+        <select class="form-select" id="role" name="role">
+          <option value="">All roles</option>
+          <% roles.forEach(function (role) { %>
+            <option value="<%= role %>"<%= filters.role === role ? ' selected' : '' %>><%= roleLabels[role] %></option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div class="col-6 col-md-2">
+        <label for="status" class="form-label small text-muted mb-1">Status</label>
+        <select class="form-select" id="status" name="status">
+          <option value="">All</option>
+          <option value="active"<%= filters.status === 'active' ? ' selected' : '' %>>Active</option>
+          <option value="inactive"<%= filters.status === 'inactive' ? ' selected' : '' %>>Inactive</option>
+        </select>
+      </div>
+
+      <div class="col-12 col-md-3 d-flex gap-2">
+        <button type="submit" class="btn btn-primary flex-grow-1">
+          <i class="bi bi-funnel me-1"></i>Filter
+        </button>
+        <a href="/users" class="btn btn-outline-secondary">Reset</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+    <span class="small text-muted">
+      <strong><%= total %></strong> user<%= total === 1 ? '' : 's' %> found
+    </span>
+    <% if (filters.search || filters.role || filters.status) { %>
+      <span class="badge text-bg-light border">Filtered</span>
+    <% } %>
+  </div>
+
+  <%
+    var rows = users.map(function (user) {
+      var isSelf = String(user._id) === currentUserId;
+      var roleBadge = roleBadges[user.role] || 'secondary';
+      var roleLabel = roleLabels[user.role] || user.role;
+      var toggleLabel = user.isActive ? 'Deactivate' : 'Activate';
+      var toggleIcon = user.isActive ? 'bi-pause-circle' : 'bi-play-circle';
+
+      return {
+        cells: [
+          { html:
+            '<div class="d-flex align-items-center gap-2">' +
+              '<span class="avatar avatar-sm">' + escapeHtml(initials(user.name)) + '</span>' +
+              '<div class="min-w-0">' +
+                '<div class="fw-semibold text-truncate">' + escapeHtml(user.name) +
+                  (isSelf ? ' <span class="badge text-bg-light border ms-1">You</span>' : '') +
+                '</div>' +
+                '<div class="text-muted small text-truncate">' + escapeHtml(user.email) + '</div>' +
+              '</div>' +
+            '</div>'
+          },
+          { html: '<span class="badge text-bg-' + roleBadge + '">' + escapeHtml(roleLabel) + '</span>' },
+          { html: '<span class="small text-muted">' + escapeHtml(user.phone || '—') + '</span>' },
+          { html: user.isActive
+              ? '<span class="badge rounded-pill text-bg-success-subtle text-success-emphasis border border-success-subtle">Active</span>'
+              : '<span class="badge rounded-pill text-bg-secondary-subtle text-secondary-emphasis border">Inactive</span>'
+          },
+          { html: '<span class="small text-muted">' + formatDateTime(user.lastLoginAt) + '</span>' },
+          { html: '<span class="small text-muted">' + formatDate(user.createdAt) + '</span>' },
+          {
+            class: 'text-end',
+            html:
+              '<div class="d-flex justify-content-end gap-1">' +
+                '<a class="btn btn-sm btn-outline-secondary" href="/users/' + user._id + '/edit" title="Edit user">' +
+                  '<i class="bi bi-pencil"></i>' +
+                '</a>' +
+                '<a class="btn btn-sm btn-outline-secondary" href="/users/' + user._id + '/password" title="Reset password">' +
+                  '<i class="bi bi-key"></i>' +
+                '</a>' +
+                '<form method="POST" action="/users/' + user._id + '/toggle-active" class="d-inline">' +
+                  '<input type="hidden" name="_csrf" value="' + escapeHtml(csrfToken) + '">' +
+                  '<button type="submit" class="btn btn-sm btn-outline-secondary" title="' + toggleLabel + '"' +
+                    (isSelf && user.isActive ? ' disabled' : '') + '>' +
+                    '<i class="bi ' + toggleIcon + '"></i>' +
+                  '</button>' +
+                '</form>' +
+                '<button type="button" class="btn btn-sm btn-outline-danger" title="Delete user"' +
+                  ' data-delete-url="/users/' + user._id + '"' +
+                  ' data-delete-name="' + escapeHtml(user.name) + '"' +
+                  (isSelf ? ' disabled' : '') + '>' +
+                  '<i class="bi bi-trash"></i>' +
+                '</button>' +
+              '</div>'
+          }
+        ]
+      };
+    });
+  %>
+
+  <%- include('../partials/table', {
+    columns: [
+      { label: 'User' },
+      { label: 'Role' },
+      { label: 'Phone' },
+      { label: 'Status' },
+      { label: 'Last sign-in' },
+      { label: 'Created' },
+      { label: '', class: 'text-end', width: '190px' }
+    ],
+    rows: rows,
+    empty: 'No users match your filters.'
+  }) %>
+
+  <%- include('../partials/pagination', { pagination: pagination }) %>
+</div>

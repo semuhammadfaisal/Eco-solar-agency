@@ -1,0 +1,163 @@
+<%
+  var headerActions = [];
+  if (can('purchases.manage')) {
+    headerActions.push({ label: 'Edit supplier', url: '/suppliers/' + supplier._id + '/edit', icon: 'bi-pencil', class: 'btn-primary' });
+    headerActions.push({ label: 'New purchase', url: '/purchases/new', icon: 'bi-receipt', class: 'btn-outline-secondary' });
+  }
+  headerActions.push({ label: 'Back to suppliers', url: '/suppliers', icon: 'bi-arrow-left', class: 'btn-outline-secondary' });
+%>
+
+<%- include('../partials/page-header', {
+  heading: supplier.name,
+  subheading: supplier.code + (supplier.company ? ' · ' + supplier.company : ''),
+  actions: headerActions
+}) %>
+
+<div class="row g-3 mt-1">
+  <div class="col-6 col-lg-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-secondary-subtle text-secondary-emphasis"><i class="bi bi-journal-text"></i></span>
+      <div class="stat-value"><%= formatPKR(stats.openingPaisa) %></div>
+      <div class="stat-label">Opening balance</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-primary-subtle text-primary"><i class="bi bi-receipt"></i></span>
+      <div class="stat-value"><%= formatPKR(stats.purchaseTotalPaisa) %></div>
+      <div class="stat-label"><%= stats.purchaseCount %> live purchase<%= stats.purchaseCount === 1 ? '' : 's' %></div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-success-subtle text-success"><i class="bi bi-check2-square"></i></span>
+      <div class="stat-value"><%= formatPKR(stats.paidPaisa) %></div>
+      <div class="stat-label">Paid to supplier</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-danger-subtle text-danger"><i class="bi bi-wallet2"></i></span>
+      <div class="stat-value <%= stats.payablePaisa > 0 ? 'text-danger' : 'text-success' %>"><%= formatPKR(stats.payablePaisa) %></div>
+      <div class="stat-label">Payable balance</div>
+    </div></div>
+  </div>
+</div>
+
+<div class="row g-3 mt-1">
+  <div class="col-12 col-xl-7">
+    <div class="card app-card">
+      <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">Supplier details</h2></div>
+      <div class="card-body p-4">
+        <dl class="row mb-0 small">
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Code</dt>
+          <dd class="col-7 col-sm-8 font-monospace"><%= supplier.code %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Company</dt>
+          <dd class="col-7 col-sm-8"><%= supplier.company || '—' %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Contact</dt>
+          <dd class="col-7 col-sm-8"><%= supplier.contactName || '—' %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Phone</dt>
+          <dd class="col-7 col-sm-8"><%= supplier.phone || '—' %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">WhatsApp</dt>
+          <dd class="col-7 col-sm-8"><%= supplier.whatsapp || '—' %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Email</dt>
+          <dd class="col-7 col-sm-8"><%= supplier.email || '—' %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Address</dt>
+          <dd class="col-7 col-sm-8"><%= supplier.address || '—' %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">City</dt>
+          <dd class="col-7 col-sm-8"><%= supplier.city || '—' %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">NTN</dt>
+          <dd class="col-7 col-sm-8 font-monospace"><%= supplier.ntn || '—' %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Payment terms</dt>
+          <dd class="col-7 col-sm-8"><%= supplier.paymentTermsDays ? supplier.paymentTermsDays + ' days' : 'Cash on delivery' %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Added</dt>
+          <dd class="col-7 col-sm-8"><%= formatDate(supplier.createdAt) %></dd>
+        </dl>
+
+        <% if (supplier.notes) { %>
+          <hr class="my-4">
+          <h3 class="h6 fw-semibold text-uppercase text-muted mb-2">Notes</h3>
+          <p class="small mb-0" style="white-space:pre-line"><%= supplier.notes %></p>
+        <% } %>
+      </div>
+    </div>
+
+    <div class="card app-card mt-3">
+      <div class="card-header bg-transparent d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <h2 class="h6 fw-semibold mb-0">Purchase orders</h2>
+        <a href="/purchases?supplier=<%= supplier._id %>" class="btn btn-sm btn-outline-secondary">Filter purchases</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle app-table mb-0">
+          <thead>
+            <tr>
+              <th>PO</th>
+              <th>Date</th>
+              <th class="text-end">Total</th>
+              <th class="text-end">Outstanding</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!purchases.length) { %>
+              <tr><td colspan="5" class="text-center py-4 text-muted">No purchase orders for this supplier yet.</td></tr>
+            <% } else { %>
+              <% purchases.forEach(function (purchase) { %>
+                <tr>
+                  <td>
+                    <a href="/purchases/<%= purchase._id %>" class="font-monospace fw-semibold"><%= purchase.number %></a>
+                    <% if (purchase.invoiceNo) { %><div class="text-muted small">Inv. <%= purchase.invoiceNo %></div><% } %>
+                  </td>
+                  <td class="small text-muted"><%= formatDate(purchase.purchaseDate) %></td>
+                  <td class="text-end small"><%= formatPKR(purchase.totalPaisa) %></td>
+                  <td class="text-end small"><%= formatPKR(Math.max(0, purchase.totalPaisa - purchase.paidPaisa)) %></td>
+                  <td>
+                    <span class="badge text-bg-<%= inventory.PURCHASE_STATUS_BADGES[purchase.status] %>"><%= inventory.PURCHASE_STATUS_LABELS[purchase.status] %></span>
+                    <div class="small text-muted mt-1"><%= inventory.PAYMENT_STATUS_LABELS[purchase.paymentStatus] %></div>
+                  </td>
+                </tr>
+              <% }); %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-5">
+    <div class="card app-card bg-light-subtle">
+      <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">Balance breakdown</h2></div>
+      <div class="card-body">
+        <div class="d-flex justify-content-between py-1 small"><span class="text-muted">Opening balance</span><span><%= formatPKR(stats.openingPaisa) %></span></div>
+        <div class="d-flex justify-content-between py-1 small"><span class="text-muted">Purchases</span><span>+ <%= formatPKR(stats.purchaseTotalPaisa) %></span></div>
+        <div class="d-flex justify-content-between py-1 small"><span class="text-muted">Payments</span><span>− <%= formatPKR(stats.paidPaisa) %></span></div>
+        <hr>
+        <div class="d-flex justify-content-between fw-semibold"><span>Payable</span><span><%= formatPKR(stats.payablePaisa) %></span></div>
+      </div>
+    </div>
+
+    <% if (can('purchases.manage')) { %>
+      <div class="card app-card border-danger-subtle mt-3">
+        <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0 text-danger">Danger zone</h2></div>
+        <div class="card-body">
+          <p class="small text-muted">A supplier with live purchase orders cannot be deleted. Cancel the orders first.</p>
+          <button type="button" class="btn btn-outline-danger btn-sm"
+                  data-delete-url="/suppliers/<%= supplier._id %>"
+                  data-delete-name="<%= supplier.name %>">
+            <i class="bi bi-trash me-1"></i>Delete supplier
+          </button>
+        </div>
+      </div>
+    <% } %>
+  </div>
+</div>

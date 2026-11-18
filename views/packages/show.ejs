@@ -1,0 +1,162 @@
+<%- include('../partials/page-header', {
+  heading: pkg.name,
+  subheading: pkg.code + ' · ' + (systems.SYSTEM_TYPE_LABELS[pkg.systemType] || pkg.systemType) + ' · ' + formatQty(pkg.capacityKw) + ' kW',
+  actions: [
+    { label: 'Build system from package', url: '/system-builder?package=' + pkg._id, icon: 'bi-cpu', class: 'btn-primary' }
+  ].concat(canManage ? [
+    { label: 'Edit package', url: '/packages/' + pkg._id + '/edit', icon: 'bi-pencil', class: 'btn-outline-secondary' }
+  ] : []).concat([
+    { label: 'Back to packages', url: '/packages', icon: 'bi-arrow-left', class: 'btn-outline-secondary' }
+  ])
+}) %>
+
+<div class="row g-3 g-lg-4 mt-1">
+  <div class="col-12 col-xl-8">
+    <div class="card app-card mb-3">
+      <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+        <h2 class="h6 mb-0 fw-semibold">Package Bill of Materials</h2>
+        <span class="badge bg-light text-dark border">
+          <%= pkg.items ? pkg.items.length : 0 %> <%= (pkg.items && pkg.items.length === 1) ? 'item' : 'items' %>
+        </span>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle app-table mb-0">
+            <thead>
+              <tr>
+                <th style="width:40px">#</th>
+                <th>Item / SKU</th>
+                <th>Category</th>
+                <th>Brand &amp; Model</th>
+                <th class="text-end">Quantity</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (!pkg.items || !pkg.items.length) { %>
+                <tr>
+                  <td colspan="6" class="text-center text-muted py-4">No preset items in this package template.</td>
+                </tr>
+              <% } else { %>
+                <% pkg.items.forEach(function (entry, index) {
+                     var it = entry.item || {};
+                %>
+                  <tr>
+                    <td class="text-muted small"><%= index + 1 %></td>
+                    <td>
+                      <a href="/items/<%= it._id %>" class="fw-medium text-body"><%= it.name || 'Unnamed item' %></a>
+                      <div class="small text-muted font-monospace"><%= it.sku || '' %></div>
+                    </td>
+                    <td>
+                      <span class="badge bg-secondary-subtle text-secondary text-uppercase"><%= it.category || '—' %></span>
+                    </td>
+                    <td class="small">
+                      <div><%= it.brand || '—' %></div>
+                      <div class="text-muted"><%= it.model || '' %></div>
+                    </td>
+                    <td class="text-end fw-semibold">
+                      <%= formatQty(entry.qty) %> <span class="text-muted small fw-normal"><%= it.unit || 'pcs' %></span>
+                    </td>
+                    <td class="small text-muted"><%= entry.notes || '—' %></td>
+                  </tr>
+                <% }); %>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <% if (pkg.description) { %>
+      <div class="card app-card mb-3">
+        <div class="card-header bg-transparent">
+          <h2 class="h6 mb-0 fw-semibold">Description &amp; Notes</h2>
+        </div>
+        <div class="card-body">
+          <p class="mb-0 text-muted" style="white-space:pre-wrap"><%= pkg.description %></p>
+        </div>
+      </div>
+    <% } %>
+  </div>
+
+  <div class="col-12 col-xl-4">
+    <div class="card app-card mb-3 border-success-subtle">
+      <div class="card-body">
+        <div class="small text-muted text-uppercase fw-semibold">Rated Capacity</div>
+        <div class="display-6 fw-bold text-success"><%= formatQty(pkg.capacityKw) %> kW</div>
+        <div class="fw-medium mt-1"><%= systems.SYSTEM_TYPE_LABELS[pkg.systemType] || pkg.systemType %> System</div>
+        <div class="mt-3">
+          <a href="/system-builder?package=<%= pkg._id %>" class="btn btn-success w-100">
+            <i class="bi bi-cpu me-1"></i>Configure &amp; Price System
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <% if (can('costs.view')) { %>
+      <div class="card app-card mb-3">
+        <div class="card-header bg-transparent">
+          <h2 class="h6 mb-0 fw-semibold">Default Overheads (Allowance)</h2>
+        </div>
+        <div class="card-body">
+          <dl class="row small mb-0">
+            <dt class="col-6 text-muted fw-normal">Labor</dt>
+            <dd class="col-6 text-end fw-medium"><%= formatPKR(pkg.laborCostPaisa) %></dd>
+
+            <dt class="col-6 text-muted fw-normal">Transport</dt>
+            <dd class="col-6 text-end fw-medium"><%= formatPKR(pkg.transportCostPaisa) %></dd>
+
+            <dt class="col-6 text-muted fw-normal">Net-Metering</dt>
+            <dd class="col-6 text-end fw-medium"><%= formatPKR(pkg.netMeteringCostPaisa) %></dd>
+
+            <% if (pkg.additionalCostPaisa) { %>
+              <dt class="col-6 text-muted fw-normal">Additional</dt>
+              <dd class="col-6 text-end fw-medium"><%= formatPKR(pkg.additionalCostPaisa) %></dd>
+            <% } %>
+
+            <dt class="col-6 text-muted fw-normal">Default Discount</dt>
+            <dd class="col-6 text-end fw-medium"><%= pkg.defaultDiscountPercent || 0 %>%</dd>
+          </dl>
+        </div>
+      </div>
+    <% } %>
+
+    <div class="card app-card mb-3">
+      <div class="card-header bg-transparent">
+        <h2 class="h6 mb-0 fw-semibold">Template Info</h2>
+      </div>
+      <div class="card-body small">
+        <dl class="row mb-0">
+          <dt class="col-5 text-muted fw-normal">Status</dt>
+          <dd class="col-7">
+            <% if (pkg.isActive) { %>
+              <span class="badge text-bg-success">Active</span>
+            <% } else { %>
+              <span class="badge text-bg-secondary">Inactive</span>
+            <% } %>
+          </dd>
+
+          <dt class="col-5 text-muted fw-normal">Created</dt>
+          <dd class="col-7"><%= formatDate(pkg.createdAt) %></dd>
+
+          <dt class="col-5 text-muted fw-normal">Created By</dt>
+          <dd class="col-7"><%= pkg.createdBy ? pkg.createdBy.name : 'System' %></dd>
+        </dl>
+      </div>
+    </div>
+
+    <% if (canManage) { %>
+      <div class="card app-card border-danger-subtle">
+        <div class="card-body">
+          <h3 class="h6 text-danger fw-semibold mb-1">Delete Template</h3>
+          <p class="small text-muted mb-3">Soft-deletes this package template. Existing saved systems built from this template remain untouched.</p>
+          <button type="button" class="btn btn-outline-danger btn-sm"
+                  data-delete-url="/packages/<%= pkg._id %>"
+                  data-delete-name="<%= pkg.name %>">
+            <i class="bi bi-trash me-1"></i>Delete package
+          </button>
+        </div>
+      </div>
+    <% } %>
+  </div>
+</div>

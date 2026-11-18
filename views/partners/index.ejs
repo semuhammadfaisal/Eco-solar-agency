@@ -1,0 +1,180 @@
+<%
+  var headerActions = [];
+  if (can('partners.manage')) {
+    headerActions.push({ label: 'Add partner', url: '/partners/new', icon: 'bi-person-plus', class: 'btn-primary' });
+  }
+  var periodLabel = period.all
+    ? 'All time'
+    : formatDate(period.from) + ' – ' + formatDate(period.to);
+  var netProfitPaisa = Number(pnl.netProfitPaisa || 0);
+  var hasFilters = filters.search || filters.status;
+%>
+
+<%- include('../partials/page-header', {
+  heading: 'Partners',
+  subheading: 'Equity split, period profit share and partner cash movements.',
+  actions: headerActions
+}) %>
+
+<div class="card app-card mt-3">
+  <div class="card-body border-bottom">
+    <form method="GET" action="/partners" class="row g-2 align-items-end">
+      <div class="col-12 col-md-4">
+        <label for="search" class="form-label small text-muted mb-1">Search</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="search" class="form-control" id="search" name="search"
+                 value="<%= filters.search %>" placeholder="Name, code, phone, email…" maxlength="80">
+        </div>
+      </div>
+
+      <div class="col-6 col-md-2">
+        <label for="status" class="form-label small text-muted mb-1">Status</label>
+        <select class="form-select" id="status" name="status">
+          <option value="">All statuses</option>
+          <option value="active"<%= filters.status === 'active' ? ' selected' : '' %>>Active</option>
+          <option value="inactive"<%= filters.status === 'inactive' ? ' selected' : '' %>>Inactive</option>
+        </select>
+      </div>
+
+      <div class="col-6 col-md-2">
+        <label for="from" class="form-label small text-muted mb-1">Profit from</label>
+        <input type="date" class="form-control" id="from" name="from"
+               value="<%= period.all ? '' : period.from %>"<%= period.all ? ' disabled' : '' %>>
+      </div>
+
+      <div class="col-6 col-md-2">
+        <label for="to" class="form-label small text-muted mb-1">Profit to</label>
+        <input type="date" class="form-control" id="to" name="to"
+               value="<%= period.all ? '' : period.to %>"<%= period.all ? ' disabled' : '' %>>
+      </div>
+
+      <div class="col-12 col-md-2 d-flex gap-2">
+        <button type="submit" class="btn btn-primary flex-grow-1"><i class="bi bi-funnel me-1"></i>Apply</button>
+        <a href="/partners" class="btn btn-outline-secondary">Reset</a>
+      </div>
+    </form>
+
+    <div class="d-flex flex-wrap gap-2 align-items-center mt-2 small">
+      <span class="text-muted">Showing profit share for:</span>
+      <span class="badge text-bg-light border"><%= periodLabel %></span>
+      <% if (period.all) { %>
+        <a href="/partners" class="link-secondary">Back to this month</a>
+      <% } else { %>
+        <a href="/partners?all=1" class="link-secondary">All time</a>
+      <% } %>
+    </div>
+  </div>
+
+  <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+    <span class="small text-muted">
+      <strong><%= partners.length %></strong> partner<%= partners.length === 1 ? '' : 's' %> shown
+    </span>
+    <% if (hasFilters) { %>
+      <span class="badge text-bg-light border">Filtered</span>
+    <% } %>
+  </div>
+
+  <%
+    var rows = partners.map(function (partner) {
+      var actions =
+        '<a class="btn btn-sm btn-outline-secondary" href="/partners/' + partner._id + '" title="View partner">' +
+          '<i class="bi bi-eye"></i>' +
+        '</a>';
+
+      if (can('partners.manage')) {
+        actions +=
+          '<a class="btn btn-sm btn-outline-secondary" href="/partners/' + partner._id + '/edit" title="Edit partner">' +
+            '<i class="bi bi-pencil"></i>' +
+          '</a>' +
+          '<button type="button" class="btn btn-sm btn-outline-danger" title="Delete partner"' +
+            ' data-delete-url="/partners/' + partner._id + '"' +
+            ' data-delete-name="' + escapeHtml(partner.name) + '">' +
+            '<i class="bi bi-trash"></i>' +
+          '</button>';
+      }
+
+      var shareClass = partner.profitSharePaisa < 0 ? 'text-danger' : 'text-success';
+
+      return {
+        cells: [
+          { html:
+            '<div class="d-flex align-items-center gap-2">' +
+              '<span class="avatar avatar-sm">' + escapeHtml(initials(partner.name)) + '</span>' +
+              '<div class="min-w-0">' +
+                '<a href="/partners/' + partner._id + '" class="fw-semibold text-truncate d-block">' + escapeHtml(partner.name) + '</a>' +
+                '<div class="text-muted small text-truncate font-monospace">' + escapeHtml(partner.code) + '</div>' +
+              '</div>' +
+            '</div>'
+          },
+          { html: '<span class="badge bg-primary-subtle text-primary-emphasis">' + partner.equityPercent + '%</span>' },
+          { class: 'text-end', html: '<span class="fw-semibold ' + shareClass + '">' + formatPKR(partner.profitSharePaisa, { decimals: 2 }) + '</span>' },
+          { class: 'text-end', html: '<span class="small">' + formatPKR(partner.contributionPaisa) + '</span>' },
+          { class: 'text-end', html: '<span class="small text-danger">' + formatPKR(partner.drawingPaisa) + '</span>' },
+          { class: 'text-end', html: '<span class="small text-muted">' + formatPKR(partner.expensePaisa) + '</span>' },
+          { class: 'text-end', html: '<span class="small fw-semibold">' + formatPKR(partner.netPositionPaisa) + '</span>' },
+          { html: partner.isActive
+              ? '<span class="badge text-bg-success">Active</span>'
+              : '<span class="badge text-bg-secondary">Inactive</span>' },
+          { class: 'text-end', html: '<div class="d-flex justify-content-end gap-1">' + actions + '</div>' }
+        ]
+      };
+    });
+  %>
+
+  <%- include('../partials/table', {
+    columns: [
+      { label: 'Partner' },
+      { label: 'Equity' },
+      { label: 'Profit share', class: 'text-end' },
+      { label: 'Capital in', class: 'text-end' },
+      { label: 'Cash taken', class: 'text-end' },
+      { label: 'Expenses paid', class: 'text-end' },
+      { label: 'Net position', class: 'text-end' },
+      { label: 'Status' },
+      { label: '', class: 'text-end', width: '120px' }
+    ],
+    rows: rows,
+    empty: 'No partners match your filters. Add a partner to start tracking equity.'
+  }) %>
+</div>
+
+<div class="row g-3 mt-1">
+  <div class="col-6 col-xl-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-primary-subtle text-primary"><i class="bi bi-graph-up-arrow"></i></span>
+      <div class="stat-value <%= netProfitPaisa < 0 ? 'text-danger' : '' %>"><%= formatPKR(netProfitPaisa, { decimals: 2 }) %></div>
+      <div class="stat-label">Net profit · <%= period.all ? 'all time' : 'selected period' %></div>
+    </div></div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-success-subtle text-success"><i class="bi bi-pie-chart"></i></span>
+      <div class="stat-value"><%= totalEquityPercent %>%</div>
+      <div class="stat-label">Equity assigned to active partners</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-info-subtle text-info"><i class="bi bi-people"></i></span>
+      <div class="stat-value"><%= formatPKR(distributedPaisa, { decimals: 2 }) %></div>
+      <div class="stat-label">Profit distributed to partners</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="card app-card h-100"><div class="card-body stat-card">
+      <span class="stat-icon bg-warning-subtle text-warning"><i class="bi bi-exclamation-circle"></i></span>
+      <div class="stat-value"><%= formatPKR(unallocatedPaisa, { decimals: 2 }) %></div>
+      <div class="stat-label">Unallocated profit</div>
+    </div></div>
+  </div>
+</div>
+
+<div class="alert alert-light border small mt-3 mb-0">
+  <i class="bi bi-info-circle me-1"></i>
+  Profit share is split by equity using the largest-remainder method, so the partner shares always add up to the net profit exactly.
+  <% if (totalEquityBps < 10000) { %>
+    Active partners currently hold <strong><%= totalEquityPercent %>%</strong>; the remaining
+    <strong><%= Number(((10000 - totalEquityBps) / 100).toFixed(2)) %>%</strong> stays unallocated.
+  <% } %>
+</div>

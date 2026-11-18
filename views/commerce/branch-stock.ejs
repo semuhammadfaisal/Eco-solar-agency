@@ -1,0 +1,9 @@
+<%- include('../partials/page-header', {
+  heading: branch.name + ' Inventory',
+  subheading: 'Available stock at this location. Consolidated totals remain on the Inventory page.',
+  actions: branchSession ? [] : [{ label: 'New transfer', url: '/transfers/new?source=' + branch._id, icon: 'bi-arrow-left-right', class: 'btn-primary' }]
+}) %>
+<div class="card app-card mt-3"><div class="card-body border-bottom"><form class="row g-2"><div class="col-md-5"><input class="form-control" name="search" value="<%= search %>" placeholder="Search SKU, product or brand"></div><div class="col-auto"><button class="btn btn-outline-primary">Search</button></div></form></div>
+<div class="table-responsive"><table class="table table-hover mb-0"><thead><tr><th>SKU</th><th>Product</th><th>Brand</th><th>Unit</th><th class="text-end">Branch stock</th><% if (!branchSession) { %><th class="text-end">All branches</th><% } %></tr></thead><tbody>
+<% items.forEach(function(item){ %><tr class="<%= item.branchStock <= item.minStock ? 'table-warning' : '' %>"><td class="font-monospace"><%= item.sku %></td><td><% if (branchSession) { %><%= item.name %><% } else { %><a href="/items/<%= item._id %>"><%= item.name %></a><% } %></td><td><%= item.brand || '—' %></td><td><%= inventory.ITEM_UNIT_LABELS[item.unit] || item.unit %></td><td class="text-end fw-bold"><%= formatQty(item.branchStock) %></td><% if (!branchSession) { %><td class="text-end text-muted"><%= formatQty(item.currentStock) %></td><% } %></tr><% }) %>
+</tbody></table></div></div>

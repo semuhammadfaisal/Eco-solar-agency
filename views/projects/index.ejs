@@ -1,0 +1,259 @@
+<%
+  var tabBase = '/projects?';
+  var filterQuery = [];
+  if (filters.search) filterQuery.push('search=' + encodeURIComponent(filters.search));
+  if (filters.customer) filterQuery.push('customer=' + encodeURIComponent(filters.customer));
+  if (filters.assignedTo) filterQuery.push('assignedTo=' + encodeURIComponent(filters.assignedTo));
+  var filterSuffix = filterQuery.length ? '&' + filterQuery.join('&') : '';
+
+  var tabs = [
+    { key: 'all', label: 'All Projects', count: stats.total, icon: 'bi-collection' },
+    { key: 'ongoing', label: 'Ongoing', count: stats.ongoing, icon: 'bi-arrow-repeat' },
+    { key: 'completed', label: 'Completed', count: stats.completed, icon: 'bi-check2-circle' },
+    { key: 'cancelled', label: 'Cancelled', count: stats.cancelled, icon: 'bi-x-circle' }
+  ];
+%>
+
+<%- include('../partials/page-header', {
+  heading: 'Projects',
+  subheading: 'Every solar project in one place — start new work for existing or new customers and track progress to completion.',
+  actions: [
+    ...(canManage ? [{ label: 'Start a project', url: '/projects/new', icon: 'bi-plus-lg', class: 'btn-primary' }] : []),
+    { label: 'Quotations', url: '/quotations', icon: 'bi-file-earmark-text', class: 'btn-outline-primary' }
+  ]
+}) %>
+
+<!-- KPI Ribbon -->
+<div class="row g-2 mb-3 mt-1">
+  <div class="col-6 col-lg-3">
+    <div class="card app-card border-primary-subtle text-center p-3 h-100">
+      <div class="text-uppercase small text-muted fw-semibold">Total Projects</div>
+      <div class="display-6 fw-bold text-primary"><%= stats.total %></div>
+      <div class="small text-muted"><%= stats.confirmed %> confirmed · <%= stats.inProgress %> in progress</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card border-info-subtle text-center p-3 h-100">
+      <div class="text-uppercase small text-muted fw-semibold">Ongoing</div>
+      <div class="display-6 fw-bold text-info"><%= stats.ongoing %></div>
+      <div class="small text-muted">Confirmed &amp; in progress</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card border-success-subtle text-center p-3 h-100">
+      <div class="text-uppercase small text-muted fw-semibold">Completed</div>
+      <div class="display-6 fw-bold text-success"><%= stats.completed %></div>
+      <div class="small text-muted">Commissioned projects</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card border-warning-subtle text-center p-3 h-100">
+      <div class="text-uppercase small text-muted fw-semibold">Contract Value</div>
+      <div class="fw-bold text-dark mt-3" style="font-size:1.35rem;"><%= formatPKR(stats.contractValuePaisa) %></div>
+      <div class="small text-muted">Excluding cancelled projects</div>
+    </div>
+  </div>
+</div>
+
+<!-- Status Tabs -->
+<div class="card app-card mb-3">
+  <div class="card-header bg-transparent py-2">
+    <ul class="nav nav-pills card-header-pills gap-1">
+      <% tabs.forEach(function (tab) { %>
+        <li class="nav-item">
+          <a class="nav-link py-2 px-3<%= activeScope === tab.key ? ' active' : '' %>"
+             href="<%= tabBase + 'scope=' + tab.key + filterSuffix %>">
+            <i class="bi <%= tab.icon %> me-1"></i><%= tab.label %>
+            <span class="badge rounded-pill ms-1 <%= activeScope === tab.key ? 'text-bg-light' : 'text-bg-secondary' %>"><%= tab.count %></span>
+          </a>
+        </li>
+      <% }); %>
+    </ul>
+  </div>
+</div>
+
+<!-- Search & Filters Toolbar -->
+<div class="card app-card mb-3">
+  <div class="card-body p-3">
+    <form method="GET" action="/projects" class="row g-2 align-items-center">
+      <input type="hidden" name="scope" value="<%= activeScope %>">
+
+      <div class="col-12 col-md-4">
+        <div class="input-group">
+          <span class="input-group-text bg-transparent text-muted"><i class="bi bi-search"></i></span>
+          <input type="text" class="form-control" name="search" value="<%= filters.search %>"
+                 placeholder="Search project, customer, phone or number…">
+        </div>
+      </div>
+
+      <div class="col-6 col-md-3">
+        <select class="form-select" name="customer">
+          <option value="">All customers</option>
+          <% customers.forEach(function (customer) { %>
+            <option value="<%= customer._id %>" <%= String(filters.customer) === String(customer._id) ? 'selected' : '' %>>
+              <%= customer.name %><%= customer.code ? ' (' + customer.code + ')' : '' %>
+            </option>
+          <% }); %>
+        </select>
+      </div>
+
+      <% if (officers && officers.length) { %>
+        <div class="col-6 col-md-3">
+          <select class="form-select" name="assignedTo">
+            <option value="">All salespeople</option>
+            <% officers.forEach(function (officer) { %>
+              <option value="<%= officer._id %>" <%= String(filters.assignedTo) === String(officer._id) ? 'selected' : '' %>>
+                <%= officer.name %>
+              </option>
+            <% }); %>
+          </select>
+        </div>
+      <% } %>
+
+      <div class="col-12 col-md-2 d-flex gap-2">
+        <button type="submit" class="btn btn-primary flex-grow-1">
+          <i class="bi bi-funnel me-1"></i>Filter
+        </button>
+        <% if (filters.search || filters.customer || filters.assignedTo) { %>
+          <a href="/projects?scope=<%= activeScope %>" class="btn btn-outline-secondary" title="Clear filters">
+            <i class="bi bi-x-lg"></i>
+          </a>
+        <% } %>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Projects Table -->
+<div class="card app-card">
+  <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
+    <h3 class="h6 fw-bold mb-0 text-primary">
+      <i class="bi bi-briefcase me-1"></i>Projects (<%= total %>)
+    </h3>
+    <% if (canManage) { %>
+      <a href="/projects/new" class="btn btn-sm btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>New Project
+      </a>
+    <% } %>
+  </div>
+
+  <% if (!sales || !sales.length) { %>
+    <div class="card-body text-center py-5 text-muted">
+      <i class="bi bi-briefcase fs-1 d-block mb-2 text-muted"></i>
+      <h4 class="h6 fw-semibold text-dark">No projects found</h4>
+      <p class="small mb-3">
+        Start a project directly for a customer, or approve a quotation to create one automatically.
+      </p>
+      <div class="d-flex justify-content-center gap-2">
+        <% if (canManage) { %>
+          <a href="/projects/new" class="btn btn-sm btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>Start a project
+          </a>
+        <% } %>
+        <a href="/quotations" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-file-earmark-text me-1"></i>View quotations
+        </a>
+      </div>
+    </div>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 app-table">
+        <thead class="table-light">
+          <tr>
+            <th>Project</th>
+            <th>Customer</th>
+            <th>System</th>
+            <th class="text-end">Contract Amount</th>
+            <% if (canViewProfit) { %>
+              <th class="text-end">Expected Profit</th>
+            <% } %>
+            <th>Payment</th>
+            <th>Assigned</th>
+            <th>Status</th>
+            <th>Start Date</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% sales.forEach(function (sale) { %>
+            <tr>
+              <td>
+                <a href="/projects/<%= sale._id %>" class="fw-bold text-decoration-none">
+                  <%= sale.projectTitle || ('Project ' + sale.saleNumber) %>
+                </a>
+                <div class="text-muted small font-monospace"><%= sale.saleNumber %></div>
+                <% if (sale.quotation) { %>
+                  <div class="small">
+                    <a href="/quotations/<%= sale.quotation._id %>" class="text-muted text-decoration-none">
+                      <i class="bi bi-file-earmark-text me-1"></i><%= sale.quotation.quotationNumber %>
+                    </a>
+                  </div>
+                <% } else if (sale.origin === 'direct') { %>
+                  <div class="small text-muted"><i class="bi bi-lightning-charge me-1"></i>Direct entry</div>
+                <% } %>
+              </td>
+              <td>
+                <% if (sale.customer) { %>
+                  <a href="/customers/<%= sale.customer._id %>" class="fw-semibold text-body">
+                    <%= sale.customer.name %>
+                  </a>
+                  <div class="text-muted small"><%= sale.customer.phone || '' %><%= sale.customer.city ? ' · ' + sale.customer.city : '' %></div>
+                <% } else { %>
+                  <span class="text-muted">—</span>
+                <% } %>
+              </td>
+              <td>
+                <span class="fw-bold text-success">
+                  <%= formatQty(sale.systemSummary ? sale.systemSummary.capacityKw : 0) %> kW
+                </span>
+                <div class="text-muted small text-uppercase">
+                  <%= systems.SYSTEM_TYPE_LABELS[sale.systemSummary ? sale.systemSummary.systemType : 'on_grid'] || 'Solar' %>
+                </div>
+              </td>
+              <td class="text-end font-monospace fw-bold text-primary">
+                <%= formatPKR(sale.amountPaisa) %>
+              </td>
+              <% if (canViewProfit) { %>
+                <td class="text-end font-monospace small">
+                  <% if (sale.expectedProfitPaisa !== undefined) { %>
+                    <span class="<%= sale.expectedProfitPaisa < 0 ? 'text-danger' : 'text-success' %> fw-semibold">
+                      <%= formatPKR(sale.expectedProfitPaisa) %>
+                    </span>
+                    <div class="text-muted" style="font-size:0.75rem;"><%= sale.profitMarginPercent %>% margin</div>
+                  <% } else { %>
+                    <span class="text-muted">—</span>
+                  <% } %>
+                </td>
+              <% } %>
+              <td>
+                <span class="badge text-bg-light border" style="font-size:0.7rem;">
+                  <%= sale.paymentType === 'installment' ? 'Installments' : 'Cash / Advance' %>
+                </span>
+              </td>
+              <td class="small text-muted">
+                <%= sale.assignedTo ? sale.assignedTo.name : '—' %>
+              </td>
+              <td>
+                <span class="badge text-bg-<%= quotations.SALE_STATUS_BADGES[sale.status] || 'secondary' %>">
+                  <%= quotations.SALE_STATUS_LABELS[sale.status] || sale.status %>
+                </span>
+              </td>
+              <td class="small text-muted">
+                <%= formatDate(sale.startDate || sale.createdAt) %>
+              </td>
+              <td class="text-end">
+                <a href="/projects/<%= sale._id %>" class="btn btn-sm btn-outline-primary">
+                  <i class="bi bi-eye me-1"></i>View
+                </a>
+              </td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+
+    <% if (pagination && pagination.total > 0) { %>
+      <%- include('../partials/pagination', { pagination: pagination }) %>
+    <% } %>
+  <% } %>
+</div>

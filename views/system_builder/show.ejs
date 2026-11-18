@@ -1,0 +1,366 @@
+<%- include('../partials/page-header', {
+  heading: config.number + ' — ' + config.name,
+  subheading: (systems.SYSTEM_TYPE_LABELS[config.systemType] || config.systemType) + ' System · ' + formatQty(config.capacityKw) + ' kW · Created ' + formatDate(config.createdAt),
+  actions: [
+    { label: 'Create quotation', url: '/quotations/new?systemConfig=' + config._id, icon: 'bi-file-earmark-plus', class: 'btn-primary' },
+    { label: 'Print BOM', url: '/system-configs/' + config._id + '/print', icon: 'bi-printer', class: 'btn-outline-primary', target: '_blank' },
+    { label: 'Edit in builder', url: '/system-builder?config=' + config._id, icon: 'bi-pencil', class: 'btn-outline-secondary' },
+    { label: 'Back to systems', url: '/system-configs', icon: 'bi-arrow-left', class: 'btn-outline-secondary' }
+  ]
+}) %>
+
+<!-- Approval Workflow Banner -->
+<% if (config.approvalStatus === 'pending') { %>
+  <div class="alert alert-warning border-warning shadow-sm mt-3 mb-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+      <div>
+        <div class="fw-bold d-flex align-items-center gap-2">
+          <i class="bi bi-shield-lock fs-5"></i>
+          <span>Pending Owner Approval</span>
+        </div>
+        <div class="small text-muted mt-1">
+          This system requires owner approval because discounts or pricing exceed authorized sales limits.
+          <% if (config.warnings && config.warnings.length) { %>
+            <span class="d-block mt-1">Alerts: <%= config.warnings.join('; ') %></span>
+          <% } %>
+        </div>
+      </div>
+      <% if (isOwner) { %>
+        <div class="d-flex gap-2">
+          <form method="POST" action="/system-configs/<%= config._id %>/approve">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button type="submit" class="btn btn-success btn-sm">
+              <i class="bi bi-check-circle me-1"></i>Approve Pricing
+            </button>
+          </form>
+          <form method="POST" action="/system-configs/<%= config._id %>/reject">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button type="submit" class="btn btn-danger btn-sm">
+              <i class="bi bi-x-circle me-1"></i>Reject
+            </button>
+          </form>
+        </div>
+      <% } else { %>
+        <span class="badge text-bg-warning">Awaiting Owner Review</span>
+      <% } %>
+    </div>
+  </div>
+<% } else if (config.approvalStatus === 'approved') { %>
+  <div class="alert alert-success border-success shadow-sm mt-3 mb-3 d-flex align-items-center justify-content-between">
+    <div class="small">
+      <i class="bi bi-check-circle-fill me-1"></i>
+      <strong>Approved by <%= config.approvedBy ? config.approvedBy.name : 'Owner' %></strong>
+      <% if (config.approvedAt) { %> on <%= formatDate(config.approvedAt) %><% } %>
+      <% if (config.approvalNotes) { %> — "<%= config.approvalNotes %>"<% } %>
+    </div>
+    <span class="badge text-bg-success">Approved</span>
+  </div>
+<% } else if (config.approvalStatus === 'rejected') { %>
+  <div class="alert alert-danger border-danger shadow-sm mt-3 mb-3 d-flex align-items-center justify-content-between">
+    <div class="small">
+      <i class="bi bi-x-circle-fill me-1"></i>
+      <strong>Pricing Rejected by <%= config.approvedBy ? config.approvedBy.name : 'Owner' %></strong>
+      <% if (config.approvalNotes) { %> — "<%= config.approvalNotes %>"<% } %>
+    </div>
+    <span class="badge text-bg-danger">Rejected</span>
+  </div>
+<% } %>
+
+<!-- Sizing & Energy Metrics Ribbon -->
+<div class="row g-2 mb-3 mt-1">
+  <div class="col-6 col-lg-3">
+    <div class="card app-card border-primary-subtle text-center p-3 h-100">
+      <div class="text-uppercase small text-muted fw-semibold">Capacity</div>
+      <div class="display-6 fw-bold text-primary"><%= formatQty(config.capacityKw) %> kW</div>
+      <div class="small text-muted"><%= config.panelCount %> Solar Panels</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card border-success-subtle text-center p-3 h-100">
+      <div class="text-uppercase small text-muted fw-semibold">Daily Production</div>
+      <div class="display-6 fw-bold text-success"><%= config.estimatedUnits ? config.estimatedUnits.daily : 0 %> units</div>
+      <div class="small text-muted">Estimated avg kWh/day</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card border-info-subtle text-center p-3 h-100">
+      <div class="text-uppercase small text-muted fw-semibold">Monthly Generation</div>
+      <div class="display-6 fw-bold text-info"><%= formatQty(config.estimatedUnits ? config.estimatedUnits.monthly : 0) %> units</div>
+      <div class="small text-muted">Yearly: <%= formatQty(config.estimatedUnits ? config.estimatedUnits.yearly : 0) %> units</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card border-warning-subtle text-center p-3 h-100">
+      <div class="text-uppercase small text-muted fw-semibold">Final Selling Price</div>
+      <div class="display-6 fw-bold text-dark"><%= formatPKR(config.finalPricePaisa) %></div>
+      <% if (canViewProfit && config.netProfitPaisa !== undefined) { %>
+        <div class="small <%= config.netProfitPaisa < 0 ? 'text-danger' : 'text-success' %> fw-medium">
+          Profit: <%= formatPKR(config.netProfitPaisa) %> (<%= config.netProfitMarginPercent %>%)
+        </div>
+      <% } else { %>
+        <div class="small text-muted"><%= systems.SYSTEM_TYPE_LABELS[config.systemType] || config.systemType %></div>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- Bill of Materials (BOM) Table -->
+  <div class="col-12 col-xl-8">
+    <div class="card app-card mb-3">
+      <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+        <h2 class="h6 mb-0 fw-semibold">
+          <i class="bi bi-file-earmark-spreadsheet me-1 text-primary"></i>Bill of Materials (BOM)
+        </h2>
+        <span class="badge bg-light text-dark border">
+          <%= config.lines ? config.lines.length : 0 %> <%= (config.lines && config.lines.length === 1) ? 'Item' : 'Items' %>
+        </span>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle app-table mb-0">
+            <thead>
+              <tr>
+                <th style="width:30px">#</th>
+                <th>Item &amp; Specifications</th>
+                <th class="text-end" style="width:90px">Qty</th>
+                <th class="text-end" style="width:130px">Unit Rate</th>
+                <th class="text-end" style="width:140px">Total Price</th>
+                <% if (canViewCosts) { %>
+                  <th class="text-end" style="width:130px">Total Cost</th>
+                <% } %>
+                <% if (canViewProfit) { %>
+                  <th class="text-end" style="width:100px">Margin</th>
+                <% } %>
+              </tr>
+            </thead>
+            <tbody>
+              <% (config.lines || []).forEach(function (line, index) {
+                   var snap = line.itemSnapshot || {};
+              %>
+                <tr>
+                  <td class="text-muted small"><%= index + 1 %></td>
+                  <td>
+                    <div class="fw-semibold text-body"><%= snap.name || 'Equipment item' %></div>
+                    <div class="d-flex flex-wrap gap-2 text-muted small mt-1 font-monospace">
+                      <span><%= snap.sku || '' %></span>
+                      <span class="badge bg-secondary-subtle text-secondary text-uppercase"><%= snap.category || 'other' %></span>
+                      <% if (snap.wattage) { %>
+                        <span class="badge bg-info-subtle text-info"><%= snap.wattage %>W</span>
+                      <% } %>
+                      <% if (snap.capacityKw) { %>
+                        <span class="badge bg-primary-subtle text-primary"><%= snap.capacityKw %>kW</span>
+                      <% } %>
+                      <% if (snap.brand) { %>
+                        <span><%= snap.brand %> <%= snap.model || '' %></span>
+                      <% } %>
+                    </div>
+                    <% if (line.notes) { %>
+                      <div class="small text-muted mt-1 fst-italic"><%= line.notes %></div>
+                    <% } %>
+                  </td>
+                  <td class="text-end fw-semibold">
+                    <%= formatQty(line.qty) %> <span class="small text-muted fw-normal"><%= snap.unit || 'pcs' %></span>
+                  </td>
+                  <td class="text-end small">
+                    <%= formatPKR(line.unitSellingPricePaisa) %>
+                  </td>
+                  <td class="text-end fw-bold text-dark">
+                    <%= formatPKR(line.totalSellingPricePaisa) %>
+                  </td>
+                  <% if (canViewCosts) { %>
+                    <td class="text-end small text-muted">
+                      <%= line.totalCostPaisa !== undefined ? formatPKR(line.totalCostPaisa) : '—' %>
+                    </td>
+                  <% } %>
+                  <% if (canViewProfit) { %>
+                    <td class="text-end small <%= (line.marginPaisa < 0) ? 'text-danger fw-bold' : 'text-success' %>">
+                      <%= line.marginPercent !== undefined ? line.marginPercent + '%' : '—' %>
+                    </td>
+                  <% } %>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Overheads & Installation Services Table -->
+    <div class="card app-card mb-3">
+      <div class="card-header bg-transparent">
+        <h2 class="h6 mb-0 fw-semibold">Installation Services &amp; Logistics</h2>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle app-table mb-0">
+            <thead>
+              <tr>
+                <th>Service / Scope Component</th>
+                <th class="text-end">Allowance (PKR)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Labor &amp; Structure Installation</td>
+                <td class="text-end fw-medium"><%= formatPKR(config.laborCostPaisa || 0) %></td>
+              </tr>
+              <tr>
+                <td>Transport &amp; Site Delivery</td>
+                <td class="text-end fw-medium"><%= formatPKR(config.transportCostPaisa || 0) %></td>
+              </tr>
+              <% if (config.netMeteringCostPaisa) { %>
+                <tr>
+                  <td>Net-Metering Documentation &amp; DISCO Processing</td>
+                  <td class="text-end fw-medium"><%= formatPKR(config.netMeteringCostPaisa) %></td>
+                </tr>
+              <% } %>
+              <% if (config.additionalCostPaisa) { %>
+                <tr>
+                  <td>Additional / Civil Works</td>
+                  <td class="text-end fw-medium"><%= formatPKR(config.additionalCostPaisa) %></td>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <% if (config.remarks) { %>
+      <div class="card app-card">
+        <div class="card-header bg-transparent">
+          <h2 class="h6 mb-0 fw-semibold">Scope Remarks &amp; Technical Notes</h2>
+        </div>
+        <div class="card-body">
+          <p class="mb-0 text-muted" style="white-space:pre-wrap"><%= config.remarks %></p>
+        </div>
+      </div>
+    <% } %>
+  </div>
+
+  <!-- Sidebar: Commercial Summary & Linked References -->
+  <div class="col-12 col-xl-4">
+    <!-- Commercial Summary -->
+    <div class="card app-card mb-3 shadow-sm border-dark-subtle">
+      <div class="card-header bg-light">
+        <h2 class="h6 mb-0 fw-semibold">Financial &amp; Pricing Summary</h2>
+      </div>
+      <div class="card-body p-3">
+        <dl class="row small mb-0 gy-2">
+          <dt class="col-7 text-muted fw-normal">Equipment Subtotal</dt>
+          <dd class="col-5 text-end fw-semibold"><%= formatPKR(config.totalItemSellingPricePaisa) %></dd>
+
+          <dt class="col-7 text-muted fw-normal">Services &amp; Overheads</dt>
+          <dd class="col-5 text-end fw-semibold">
+            <%= formatPKR((config.laborCostPaisa || 0) + (config.transportCostPaisa || 0) + (config.netMeteringCostPaisa || 0) + (config.additionalCostPaisa || 0)) %>
+          </dd>
+
+          <dt class="col-7 text-muted fw-normal">Gross Total</dt>
+          <dd class="col-5 text-end fw-semibold"><%= formatPKR(config.grossPricePaisa) %></dd>
+
+          <% if (config.discountPaisa) { %>
+            <div class="d-flex justify-content-between text-danger small py-1">
+              <dt class="text-danger fw-normal">Discount (<%= config.discountPercent %>%)</dt>
+              <dd class="text-end fw-semibold mb-0">- <%= formatPKR(config.discountPaisa) %></dd>
+            </div>
+          <% } %>
+
+          <hr class="my-2">
+
+          <dt class="col-7 text-body fs-6 fw-bold">Net Final Selling Price</dt>
+          <dd class="col-5 text-end fs-6 fw-bold text-primary"><%= formatPKR(config.finalPricePaisa) %></dd>
+
+          <% if (canViewCosts && config.totalBaseCostPaisa !== undefined) { %>
+            <div class="border-top pt-2 mt-2 w-100">
+              <div class="d-flex justify-content-between small text-muted py-1">
+                <span>Total Base Cost:</span>
+                <span class="fw-medium"><%= formatPKR(config.totalBaseCostPaisa) %></span>
+              </div>
+              <% if (config.salesCommissionPaisa) { %>
+                <div class="d-flex justify-content-between small text-muted py-1">
+                  <span>Sales Commission:</span>
+                  <span class="fw-medium"><%= formatPKR(config.salesCommissionPaisa) %></span>
+                </div>
+              <% } %>
+              <% if (canViewProfit && config.netProfitPaisa !== undefined) { %>
+                <div class="d-flex justify-content-between py-1 <%= config.netProfitPaisa < 0 ? 'text-danger' : 'text-success' %>">
+                  <span class="fw-bold">Net Profit:</span>
+                  <span class="fw-bold"><%= formatPKR(config.netProfitPaisa) %> (<%= config.netProfitMarginPercent %>%)</span>
+                </div>
+              <% } %>
+            </div>
+          <% } %>
+        </dl>
+      </div>
+      <div class="card-footer bg-transparent p-3">
+        <a href="/system-configs/<%= config._id %>/print" target="_blank" class="btn btn-primary w-100 mb-2">
+          <i class="bi bi-printer me-1"></i>Print BOM &amp; Customer Proposal
+        </a>
+        <a href="/system-builder?config=<%= config._id %>" class="btn btn-outline-secondary w-100 btn-sm">
+          <i class="bi bi-pencil me-1"></i>Reopen in System Builder
+        </a>
+      </div>
+    </div>
+
+    <!-- Linked Entities Card -->
+    <div class="card app-card mb-3">
+      <div class="card-header bg-transparent">
+        <h2 class="h6 mb-0 fw-semibold">Linked References</h2>
+      </div>
+      <div class="card-body small">
+        <dl class="row mb-0 gy-2">
+          <dt class="col-5 text-muted fw-normal">Customer</dt>
+          <dd class="col-7">
+            <% if (config.customer) { %>
+              <a href="/customers/<%= config.customer._id %>" class="fw-semibold text-body"><%= config.customer.name %></a>
+              <div class="text-muted"><%= config.customer.code %></div>
+              <div class="text-muted"><%= config.customer.phone %></div>
+            <% } else { %>
+              <span class="text-muted">None (Standalone)</span>
+            <% } %>
+          </dd>
+
+          <% if (config.survey) { %>
+            <dt class="col-5 text-muted fw-normal">Site Survey</dt>
+            <dd class="col-7">
+              <a href="/surveys/<%= config.survey._id %>" class="font-monospace fw-semibold"><%= config.survey.number %></a>
+              <div class="text-muted">Recommended: <%= config.survey.recommendedKw %> kW</div>
+            </dd>
+          <% } %>
+
+          <% if (config.package) { %>
+            <dt class="col-5 text-muted fw-normal">Package</dt>
+            <dd class="col-7">
+              <a href="/packages/<%= config.package._id %>"><%= config.package.name %></a>
+            </dd>
+          <% } %>
+
+          <dt class="col-5 text-muted fw-normal">Created By</dt>
+          <dd class="col-7"><%= config.createdBy ? config.createdBy.name : 'System' %></dd>
+
+          <dt class="col-5 text-muted fw-normal">Approval Status</dt>
+          <dd class="col-7">
+            <span class="badge text-bg-<%= systems.APPROVAL_STATUS_BADGES[config.approvalStatus] || 'secondary' %>">
+              <%= systems.APPROVAL_STATUS_LABELS[config.approvalStatus] || config.approvalStatus %>
+            </span>
+          </dd>
+        </dl>
+      </div>
+    </div>
+
+    <% if (can('systems.manage')) { %>
+      <div class="card app-card border-danger-subtle">
+        <div class="card-body">
+          <h3 class="h6 text-danger fw-semibold mb-1">Delete Configuration</h3>
+          <p class="small text-muted mb-3">Soft-deletes this system configuration. Retained in historical audit trail.</p>
+          <button type="button" class="btn btn-outline-danger btn-sm"
+                  data-delete-url="/system-configs/<%= config._id %>"
+                  data-delete-name="<%= config.number %>">
+            <i class="bi bi-trash me-1"></i>Delete configuration
+          </button>
+        </div>
+      </div>
+    <% } %>
+  </div>
+</div>

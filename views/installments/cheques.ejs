@@ -1,0 +1,299 @@
+<%- include('../partials/page-header', {
+  heading: 'Cheque Register & Vault',
+  subheading: 'Register customer cheques, link each one to a project, POS order or installment plan, then track deposits, clearance and bounce handling.',
+  actions: [
+    ...(canManage ? [{ label: 'Add cheque', url: '/installments/cheques/new', icon: 'bi-plus-lg', class: 'btn-primary' }] : []),
+    { label: 'Installment plans', url: '/installments', icon: 'bi-calendar3-range', class: 'btn-outline-primary' },
+    { label: 'Collection calendar', url: '/installments/calendar', icon: 'bi-calendar-event', class: 'btn-outline-secondary' }
+  ]
+}) %>
+
+<!-- Status Metrics Cards -->
+<%
+  var heldCount = 0, depCount = 0, clearCount = 0, bounceCount = 0;
+  (statusCounts || []).forEach(function (row) {
+    if (row._id === 'held') heldCount = row.count;
+    if (row._id === 'deposited') depCount = row.count;
+    if (row._id === 'cleared') clearCount = row.count;
+    if (row._id === 'bounced') bounceCount = row.count;
+  });
+%>
+<div class="row g-2 mb-3 mt-1">
+  <div class="col-6 col-lg-3">
+    <div class="card app-card border-secondary-subtle text-center p-3 h-100">
+      <div class="text-uppercase small text-muted fw-semibold">Held in Vault</div>
+      <div class="display-6 fw-bold text-dark"><%= heldCount %></div>
+      <div class="small text-muted">Awaiting deposit date</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card border-info-subtle text-center p-3 h-100">
+      <div class="text-uppercase small text-muted fw-semibold">Deposited in Bank</div>
+      <div class="display-6 fw-bold text-info"><%= depCount %></div>
+      <div class="small text-muted">Clearing in progress</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card border-success-subtle text-center p-3 h-100">
+      <div class="text-uppercase small text-muted fw-semibold">Cleared / Realized</div>
+      <div class="display-6 fw-bold text-success"><%= clearCount %></div>
+      <div class="small text-muted">Funds credited</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card app-card border-danger-subtle text-center p-3 h-100">
+      <div class="text-uppercase small text-muted fw-semibold">Bounced / Dishonored</div>
+      <div class="display-6 fw-bold text-danger"><%= bounceCount %></div>
+      <div class="small text-danger fw-semibold">Recovery watch active</div>
+    </div>
+  </div>
+</div>
+
+<!-- Search & Filters Toolbar -->
+<div class="card app-card mb-3">
+  <div class="card-body p-3">
+    <form method="GET" action="/installments/cheques" class="row g-2 align-items-center">
+      <% if (filters.sale) { %><input type="hidden" name="sale" value="<%= filters.sale %>"><% } %>
+      <% if (filters.posSale) { %><input type="hidden" name="posSale" value="<%= filters.posSale %>"><% } %>
+
+      <div class="col-12 col-md-4">
+        <div class="input-group">
+          <span class="input-group-text bg-transparent text-muted"><i class="bi bi-search"></i></span>
+          <input type="text" class="form-control" name="search" value="<%= filters.search %>"
+                 placeholder="Search cheque #, bank, branch or notes…">
+        </div>
+      </div>
+
+      <div class="col-12 col-md-3">
+        <select class="form-select" name="customer">
+          <option value="">All customers</option>
+          <% customers.forEach(function (customer) { %>
+            <option value="<%= customer._id %>" <%= String(filters.customer) === String(customer._id) ? 'selected' : '' %>>
+              <%= customer.name %><%= customer.code ? ' (' + customer.code + ')' : '' %>
+            </option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div class="col-6 col-md-2">
+        <input type="text" class="form-control" name="bankName" value="<%= filters.bankName %>"
+               placeholder="Bank name…">
+      </div>
+
+      <div class="col-6 col-md-2">
+        <select class="form-select" name="status">
+          <option value="">All statuses</option>
+          <% installments.CHEQUE_STATUSES.forEach(function (st) { %>
+            <option value="<%= st %>" <%= filters.status === st ? 'selected' : '' %>>
+              <%= installments.CHEQUE_STATUS_LABELS[st] || st %>
+            </option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div class="col-12 col-md-1 d-flex gap-1">
+        <button type="submit" class="btn btn-primary flex-grow-1" title="Filter">
+          <i class="bi bi-funnel"></i>
+        </button>
+        <% if (filters.search || filters.customer || filters.bankName || filters.status || filters.sale || filters.posSale) { %>
+          <a href="/installments/cheques" class="btn btn-outline-secondary" title="Clear filters">
+            <i class="bi bi-x-lg"></i>
+          </a>
+        <% } %>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Cheque Register Table -->
+<div class="card app-card">
+  <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
+    <h3 class="h6 fw-bold mb-0 text-primary">
+      <i class="bi bi-journal-check me-1"></i>Cheque Register (<%= total %>)
+    </h3>
+  </div>
+
+  <% if (!cheques || !cheques.length) { %>
+    <div class="card-body text-center py-5 text-muted">
+      <i class="bi bi-journal-x fs-1 d-block mb-2 text-muted"></i>
+      <h4 class="h6 fw-semibold text-dark">No cheques found</h4>
+      <p class="small mb-3">Add a cheque directly to the vault and link it to a customer, project, POS order or installment plan.</p>
+      <% if (canManage) { %>
+        <a href="/installments/cheques/new" class="btn btn-sm btn-primary">
+          <i class="bi bi-plus-lg me-1"></i>Add cheque
+        </a>
+      <% } %>
+    </div>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 app-table">
+        <thead class="table-light">
+          <tr>
+            <th>Cheque #</th>
+            <th>Customer</th>
+            <th>For / System</th>
+            <th>Bank &amp; Branch</th>
+            <th>Maturity Date</th>
+            <th class="text-end">Amount</th>
+            <th>Linked Plan</th>
+            <th>Status</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% cheques.forEach(function (ch) { %>
+            <tr class="<%= ch.status === 'bounced' ? 'table-danger-subtle' : '' %>">
+              <td class="font-monospace fw-bold"><%= ch.chequeNumber %></td>
+              <td>
+                <% if (ch.customer) { %>
+                  <a href="/customers/<%= ch.customer._id %>" class="fw-semibold text-body">
+                    <%= ch.customer.name %>
+                  </a>
+                  <div class="text-muted small"><%= ch.customer.phone %><%= ch.customer.city ? ' · ' + ch.customer.city : '' %></div>
+                <% } else { %>—<% } %>
+              </td>
+              <td>
+                <%
+                  var linkedSale = ch.sale || (ch.installmentPlan && ch.installmentPlan.sale) || null;
+                  var saleViaPlan = !ch.sale && linkedSale;
+                  var capKw = linkedSale && linkedSale.systemSummary ? Number(linkedSale.systemSummary.capacityKw) || 0 : 0;
+                %>
+                <% if (linkedSale) { %>
+                  <a href="/projects/<%= linkedSale._id %>" class="fw-semibold text-body text-decoration-none">
+                    <%= linkedSale.projectTitle || ('Project ' + linkedSale.saleNumber) %>
+                  </a>
+                  <div class="text-muted small">
+                    <%= linkedSale.saleNumber %>
+                    <%= capKw > 0 ? '· ' + formatQty(capKw) + ' kW' : '' %>
+                    <%= systems.SYSTEM_TYPE_LABELS[linkedSale.systemSummary ? linkedSale.systemSummary.systemType : 'on_grid'] || 'Solar' %>
+                    <%= saleViaPlan ? '· via plan' : '' %>
+                  </div>
+                <% } else if (ch.posSale) { %>
+                  <a href="/pos/<%= ch.posSale._id %>" class="fw-semibold text-body text-decoration-none">
+                    <%= ch.posSale.number %>
+                  </a>
+                  <div class="text-muted small">POS order · <%= formatPKR(ch.posSale.totalPaisa) %></div>
+                <% } else { %>
+                  <span class="text-muted small">General payment</span>
+                <% } %>
+              </td>
+              <td>
+                <div class="fw-medium"><%= ch.bankName %></div>
+                <% if (ch.branch) { %><div class="text-muted small"><%= ch.branch %></div><% } %>
+              </td>
+              <td class="small fw-semibold <%= new Date(ch.chequeDate) <= new Date() && ch.status === 'held' ? 'text-danger' : '' %>">
+                <%= formatDate(ch.chequeDate) %>
+              </td>
+              <td class="text-end font-monospace fw-bold text-dark"><%= formatPKR(ch.amountPaisa) %></td>
+              <td>
+                <% if (ch.installmentPlan) { %>
+                  <a href="/installments/<%= ch.installmentPlan._id %>" class="font-monospace small">
+                    <%= ch.installmentPlan.planNumber %>
+                  </a>
+                <% } else { %>—<% } %>
+              </td>
+              <td>
+                <span class="badge text-bg-<%= installments.CHEQUE_STATUS_BADGES[ch.status] || 'secondary' %>">
+                  <%= installments.CHEQUE_STATUS_LABELS[ch.status] || ch.status %>
+                </span>
+                <% if (ch.status === 'bounced' && ch.bounceReason) { %>
+                  <div class="text-danger small" style="font-size:0.75rem;"><%= ch.bounceReason %></div>
+                <% } %>
+              </td>
+              <td class="text-end">
+                <% if (canManage) { %>
+                  <div class="dropdown d-inline-block">
+                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                      Manage
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                      <% if (ch.status === 'held') { %>
+                        <li>
+                          <form method="POST" action="/installments/cheques/<%= ch._id %>/status">
+                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                            <input type="hidden" name="status" value="deposited">
+                            <button type="submit" class="dropdown-item text-info">
+                              <i class="bi bi-box-arrow-up-right me-2"></i>Mark Deposited in Bank
+                            </button>
+                          </form>
+                        </li>
+                      <% } %>
+                      <% if (ch.status === 'deposited' || ch.status === 'held') { %>
+                        <li>
+                          <form method="POST" action="/installments/cheques/<%= ch._id %>/status">
+                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                            <input type="hidden" name="status" value="cleared">
+                            <button type="submit" class="dropdown-item text-success">
+                              <i class="bi bi-check-circle me-2"></i>Mark Cleared / Realized
+                            </button>
+                          </form>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                          <button type="button" class="dropdown-item text-danger"
+                                  data-bs-toggle="modal" data-bs-target="#bounceChequeModal"
+                                  onclick="setBounceAction('<%= ch._id %>', '<%= ch.chequeNumber %>')">
+                            <i class="bi bi-exclamation-triangle me-2"></i>Mark Bounced / Dishonored
+                          </button>
+                        </li>
+                      <% } %>
+                    </ul>
+                  </div>
+                <% } else { %>—<% } %>
+              </td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <% if (pagination && pagination.pages > 1) { %>
+      <div class="card-footer bg-transparent py-3">
+        <%- include('../partials/pagination', { pagination: pagination, url: '/installments/cheques' }) %>
+      </div>
+    <% } %>
+  <% } %>
+</div>
+
+<!-- Bounce Cheque Modal -->
+<div class="modal fade" id="bounceChequeModal" tabindex="-1" aria-labelledby="bounceChequeModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" id="bounceChequeForm" action="">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="status" value="bounced">
+
+        <div class="modal-header bg-danger-subtle">
+          <h5 class="modal-title text-danger" id="bounceChequeModalLabel">Record Bounced Cheque</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-danger small">
+            <i class="bi bi-exclamation-octagon-fill me-1"></i>
+            <strong>Warning:</strong> Marking cheque <span id="bounceChequeNum" class="font-monospace fw-bold"></span> as bounced will <strong>automatically flag the customer's installment account for recovery watch</strong> and trigger recovery audit actions.
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold text-uppercase text-muted">Dishonor / Bounce Reason <span class="text-danger">*</span></label>
+            <textarea class="form-control" name="bounceReason" rows="3" required
+                      placeholder="e.g. Insufficient funds / Signature mismatch (Bank return memo attached)"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger">
+            <i class="bi bi-exclamation-triangle me-1"></i>Confirm Cheque Bounced &amp; Flag Account
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function setBounceAction(chequeId, num) {
+  document.getElementById('bounceChequeForm').action = '/installments/cheques/' + chequeId + '/status';
+  document.getElementById('bounceChequeNum').textContent = '#' + num;
+}
+</script>

@@ -1,0 +1,29 @@
+<%
+  // Page title block.
+  // heading    {string}  required
+  // subheading {string}  optional
+  // actions    {Array}   optional [{ label, url, icon, class }]
+  var headerActions = (typeof actions !== 'undefined' && actions) ? actions : [];
+%>
+<div class="page-header">
+  <div class="page-header-copy">
+    <span class="page-header-kicker"><i class="bi bi-sun-fill"></i> Solar Agency</span>
+    <h1><%= heading %></h1>
+    <% if (typeof subheading !== 'undefined' && subheading) { %>
+      <p><%= subheading %></p>
+    <% } %>
+  </div>
+  <% if (headerActions.length) { %>
+    <div class="page-header-actions">
+      <% headerActions.forEach(function (action) { %>
+        <a href="<%= action.url %>" class="btn <%= action.class || 'btn-primary' %>"
+           <% if (action.target) { %>target="<%= action.target %>"<% } %>
+           <% if (action.modal) { %>data-bs-toggle="modal" data-bs-target="<%= action.modal %>"<% } %>
+           <% if (action.attrs) { %><%- action.attrs %><% } %>>
+          <% if (action.icon) { %><i class="bi <%= action.icon %> me-1"></i><% } %><%= action.label %>
+        </a>
+      <% }); %>
+    </div>
+  <% } %>
+  <span class="page-header-mark" aria-hidden="true"><i class="bi bi-sun"></i></span>
+</div>

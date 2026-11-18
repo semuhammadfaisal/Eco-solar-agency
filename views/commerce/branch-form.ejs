@@ -1,0 +1,12 @@
+<%- include('../partials/page-header', { heading: isEdit ? 'Edit branch' : 'Add branch', subheading: 'Create a shop or warehouse location in this software.', actions: [{ label: 'Back', url: '/branches', icon: 'bi-arrow-left', class: 'btn-outline-secondary' }] }) %>
+<div class="card app-card mt-3"><div class="card-body p-4"><form method="POST" action="<%= formAction %>" class="row g-3">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>"><% if (isEdit) { %><input type="hidden" name="_method" value="PUT"><% } %>
+  <div class="col-md-6"><label class="form-label">Branch name *</label><input class="form-control" name="name" required maxlength="120" value="<%= old('name', branch ? branch.name : '') %>"></div>
+  <div class="col-md-3"><label class="form-label">Phone</label><input class="form-control" name="phone" maxlength="20" value="<%= old('phone', branch ? branch.phone : '') %>"></div>
+  <div class="col-md-3"><label class="form-label">Status</label><select class="form-select" name="isActive"><option value="1">Active</option><option value="0" <%= branch && !branch.isActive ? 'selected' : '' %>>Inactive</option></select></div>
+  <div class="col-md-6"><label class="form-label">Address</label><input class="form-control" name="address" maxlength="250" value="<%= old('address', branch ? branch.address : '') %>"></div>
+  <div class="col-md-3"><label class="form-label">City</label><input class="form-control" name="city" maxlength="80" value="<%= old('city', branch ? branch.city : '') %>"></div>
+  <div class="col-md-3"><label class="form-label">Manager</label><select class="form-select" name="manager"><option value="">Not assigned</option><% managers.forEach(function(u){ %><option value="<%= u._id %>" <%= branch && String(branch.manager || '') === String(u._id) ? 'selected' : '' %>><%= u.name %></option><% }) %></select></div>
+  <div class="col-12"><label class="form-label">Notes</label><textarea class="form-control" name="notes" rows="3"><%= old('notes', branch ? branch.notes : '') %></textarea></div>
+  <div class="col-12"><button class="btn btn-primary">Save branch</button></div>
+</form></div></div>

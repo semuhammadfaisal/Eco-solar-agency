@@ -1,0 +1,119 @@
+<%- include('../partials/page-header', {
+  heading: 'Daily attendance',
+  subheading: 'Mark attendance for the active workforce. Blank rows are left unmarked.',
+  actions: [
+    { label: 'Monthly summary', url: '/employees/attendance/summary', icon: 'bi-bar-chart', class: 'btn-outline-secondary' },
+    { label: 'Back to employees', url: '/employees', icon: 'bi-arrow-left', class: 'btn-outline-secondary' }
+  ]
+}) %>
+
+<div class="card app-card mt-3">
+  <div class="card-body border-bottom">
+    <form method="GET" action="/employees/attendance" class="row g-2 align-items-end">
+      <div class="col-12 col-sm-5 col-md-4">
+        <label for="date" class="form-label small text-muted mb-1">Attendance date</label>
+        <input type="date" class="form-control" id="date" name="date" value="<%= dateKey %>">
+      </div>
+      <div class="col-12 col-sm-7 col-md-5 d-flex gap-2">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-calendar-check me-1"></i>Show day</button>
+        <a href="/employees/attendance" class="btn btn-outline-secondary">Today</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card-header bg-transparent">
+    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+      <div class="small text-muted">
+        Showing <strong><%= items.length %></strong> employee<%= items.length === 1 ? '' : 's' %>
+        for <strong><%= formatDate(dateKey) %></strong>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <span class="badge text-bg-success-subtle text-success-emphasis border border-success-subtle">Present <%= summary.present || 0 %></span>
+        <span class="badge text-bg-danger-subtle text-danger-emphasis border border-danger-subtle">Absent <%= summary.absent || 0 %></span>
+        <span class="badge text-bg-warning-subtle text-warning-emphasis border border-warning-subtle">Late <%= summary.late || 0 %></span>
+        <span class="badge text-bg-info-subtle text-info-emphasis border border-info-subtle">Leave <%= summary.leave || 0 %></span>
+        <span class="badge text-bg-light border">Half day <%= summary.half_day || 0 %></span>
+        <span class="badge text-bg-secondary-subtle text-secondary-emphasis border">Unmarked <%= summary.unmarked || 0 %></span>
+      </div>
+    </div>
+  </div>
+
+  <% if (!items.length) { %>
+    <div class="card-body text-center py-5 text-muted">
+      <i class="bi bi-people fs-2 d-block mb-2"></i>
+      <p class="mb-1">No active employees to mark.</p>
+      <a href="/employees/new" class="small">Add an employee profile</a>
+    </div>
+  <% } else { %>
+    <form method="POST" action="/employees/attendance" data-once>
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <input type="hidden" name="date" value="<%= dateKey %>">
+
+      <div class="table-responsive">
+        <table class="table table-hover align-middle app-table mb-0">
+          <thead>
+            <tr>
+              <th style="min-width:190px">Employee</th>
+              <th style="min-width:150px">Status</th>
+              <th style="min-width:110px">Check in</th>
+              <th style="min-width:110px">Check out</th>
+              <th style="min-width:220px">Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% items.forEach(function (item) {
+                 var employee = item.employee;
+                 var attendance = item.attendance;
+                 var name = employee.user ? employee.user.name : 'Unknown staff';
+                 var empId = String(employee._id);
+            %>
+              <tr>
+                <td>
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="avatar avatar-sm"><%= initials(name) %></span>
+                    <div class="min-w-0">
+                      <div class="fw-semibold text-truncate"><%= name %></div>
+                      <div class="text-muted small text-truncate"><%= employee.designation %></div>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <select class="form-select form-select-sm" name="status_<%= empId %>" aria-label="Attendance status for <%= name %>">
+                    <option value="">Not marked</option>
+                    <% crm.ATTENDANCE_STATUSES.forEach(function (status) { %>
+                      <option value="<%= status %>"<%= attendance && attendance.status === status ? ' selected' : '' %>>
+                        <%= crm.ATTENDANCE_STATUS_LABELS[status] %>
+                      </option>
+                    <% }); %>
+                  </select>
+                </td>
+                <td>
+                  <input type="time" class="form-control form-control-sm" name="checkIn_<%= empId %>"
+                         value="<%= attendance ? attendance.checkIn : '' %>" aria-label="Check in for <%= name %>">
+                </td>
+                <td>
+                  <input type="time" class="form-control form-control-sm" name="checkOut_<%= empId %>"
+                         value="<%= attendance ? attendance.checkOut : '' %>" aria-label="Check out for <%= name %>">
+                </td>
+                <td>
+                  <input type="text" class="form-control form-control-sm" name="notes_<%= empId %>"
+                         value="<%= attendance ? attendance.notes : '' %>" maxlength="300"
+                         placeholder="Optional note" aria-label="Notes for <%= name %>">
+                </td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between px-3 py-3 border-top">
+        <div class="small text-muted">
+          Changing an existing row updates that day's record. Every change is audited.
+        </div>
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check2-circle me-1"></i>Save attendance
+        </button>
+      </div>
+    </form>
+  <% } %>
+</div>

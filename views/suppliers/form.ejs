@@ -1,0 +1,117 @@
+<%- include('../partials/page-header', {
+  heading: isEdit ? 'Edit supplier' : 'Add supplier',
+  subheading: isEdit
+    ? 'Update vendor contact, terms and opening balance.'
+    : 'Create a vendor record. The supplier code is generated automatically.',
+  actions: [{ label: 'Back to suppliers', url: '/suppliers', icon: 'bi-arrow-left', class: 'btn-outline-secondary' }]
+}) %>
+
+<div class="row g-3 g-lg-4 mt-1">
+  <div class="col-12 col-xl-8">
+    <div class="card app-card">
+      <div class="card-body p-4">
+        <%- include('../partials/form-errors') %>
+
+        <form method="POST" action="<%= formAction %>" novalidate>
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <% if (isEdit) { %><input type="hidden" name="_method" value="PUT"><% } %>
+
+          <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Business</h2>
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <label for="name" class="form-label">Supplier name <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="name" name="name"
+                     value="<%= old('name', supplier ? supplier.name : '') %>" maxlength="150" required
+                     placeholder="Sunlight Traders">
+            </div>
+            <div class="col-12 col-md-6">
+              <label for="company" class="form-label">Company</label>
+              <input type="text" class="form-control" id="company" name="company"
+                     value="<%= old('company', supplier ? supplier.company : '') %>" maxlength="150">
+            </div>
+            <div class="col-12 col-md-6">
+              <label for="contactName" class="form-label">Contact person</label>
+              <input type="text" class="form-control" id="contactName" name="contactName"
+                     value="<%= old('contactName', supplier ? supplier.contactName : '') %>" maxlength="120">
+            </div>
+            <div class="col-6 col-md-3">
+              <label for="phone" class="form-label">Phone</label>
+              <input type="text" class="form-control" id="phone" name="phone"
+                     value="<%= old('phone', supplier ? supplier.phone : '') %>" maxlength="20" placeholder="03001234567">
+            </div>
+            <div class="col-6 col-md-3">
+              <label for="whatsapp" class="form-label">WhatsApp</label>
+              <input type="text" class="form-control" id="whatsapp" name="whatsapp"
+                     value="<%= old('whatsapp', supplier ? supplier.whatsapp : '') %>" maxlength="20">
+            </div>
+            <div class="col-12 col-md-6">
+              <label for="email" class="form-label">Email</label>
+              <input type="email" class="form-control" id="email" name="email"
+                     value="<%= old('email', supplier ? supplier.email : '') %>" maxlength="190">
+            </div>
+            <div class="col-6 col-md-3">
+              <label for="ntn" class="form-label">NTN</label>
+              <input type="text" class="form-control" id="ntn" name="ntn"
+                     value="<%= old('ntn', supplier ? supplier.ntn : '') %>" maxlength="30">
+            </div>
+            <div class="col-6 col-md-3">
+              <label for="city" class="form-label">City</label>
+              <input type="text" class="form-control" id="city" name="city"
+                     value="<%= old('city', supplier ? supplier.city : '') %>" maxlength="80">
+            </div>
+            <div class="col-12">
+              <label for="address" class="form-label">Address</label>
+              <input type="text" class="form-control" id="address" name="address"
+                     value="<%= old('address', supplier ? supplier.address : '') %>" maxlength="250">
+            </div>
+          </div>
+
+          <hr class="my-4">
+
+          <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Account</h2>
+          <div class="row g-3">
+            <div class="col-6 col-md-4">
+              <label for="paymentTermsDays" class="form-label">Payment terms (days)</label>
+              <input type="number" class="form-control" id="paymentTermsDays" name="paymentTermsDays" min="0" max="365" step="1"
+                     value="<%= old('paymentTermsDays', supplier ? supplier.paymentTermsDays : 0) %>">
+            </div>
+            <div class="col-6 col-md-4">
+              <label for="openingBalance" class="form-label">Opening balance (PKR)</label>
+              <input type="text" class="form-control" id="openingBalance" name="openingBalance" inputmode="decimal"
+                     value="<%= old('openingBalance', supplier && supplier.openingBalancePaisa ? (supplier.openingBalancePaisa / 100) : '') %>"
+                     placeholder="0.00">
+              <div class="form-text">Amount already owed when this record is created.</div>
+            </div>
+          </div>
+
+          <div class="mt-4">
+            <label for="notes" class="form-label">Notes</label>
+            <textarea class="form-control" id="notes" name="notes" rows="3" maxlength="1000"><%= old('notes', supplier ? supplier.notes : '') %></textarea>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2 justify-content-end mt-4">
+            <a href="<%= isEdit ? '/suppliers/' + supplier._id : '/suppliers' %>" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check2-circle me-1"></i><%= isEdit ? 'Save changes' : 'Create supplier' %>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-4">
+    <div class="card app-card bg-light-subtle">
+      <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">Payable balance</h2></div>
+      <div class="card-body small text-muted">
+        <p>The supplier balance is always derived, never stored:</p>
+        <div class="font-monospace small bg-white border rounded p-2 mb-3">
+          opening balance<br>
+          + live purchase totals<br>
+          − recorded payments
+        </div>
+        <p class="mb-0">This means the balance on the supplier page can never drift away from the purchase records.</p>
+      </div>
+    </div>
+  </div>
+</div>

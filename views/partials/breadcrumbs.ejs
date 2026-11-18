@@ -1,0 +1,16 @@
+<% if (typeof breadcrumbs !== 'undefined' && breadcrumbs && breadcrumbs.length) { %>
+  <nav aria-label="breadcrumb" class="app-breadcrumbs">
+    <ol class="breadcrumb mb-0">
+      <% breadcrumbs.forEach(function (crumb, index) {
+           var isLast = index === breadcrumbs.length - 1; %>
+        <li class="breadcrumb-item<%= isLast ? ' active' : '' %>"<%= isLast ? ' aria-current="page"' : '' %>>
+          <% if (!isLast && crumb.url) { %>
+            <a href="<%= crumb.url %>"><%= crumb.label %></a>
+          <% } else { %>
+            <%= crumb.label %>
+          <% } %>
+        </li>
+      <% }); %>
+    </ol>
+  </nav>
+<% } %>

@@ -1,0 +1,294 @@
+<%
+  var headerActions = [];
+  if (serial.item) {
+    headerActions.push({ label: 'Open item', url: '/items/' + serial.item._id, icon: 'bi-box-seam', class: 'btn-outline-secondary' });
+  }
+  if (canManage) {
+    headerActions.push({ label: 'Edit serial', url: '/serials/' + serial._id + '/edit', icon: 'bi-pencil', class: 'btn-primary' });
+  }
+  headerActions.push({ label: 'Back to serials', url: '/serials', icon: 'bi-arrow-left', class: 'btn-outline-secondary' });
+
+  var customerMap = {};
+  (customers || []).forEach(function (customer) {
+    customerMap[String(customer._id)] = customer.name;
+  });
+
+  var events = (serial.events || []).slice().reverse();
+%>
+
+<%- include('../partials/page-header', {
+  heading: 'Serial ' + serial.serial,
+  subheading: (serial.item ? serial.item.sku + ' — ' + serial.item.name : 'Item removed') + ' · ' + (inventory.SERIAL_STATUS_LABELS[serial.status] || serial.status),
+  actions: headerActions
+}) %>
+
+<div class="row g-3 mt-1">
+  <div class="col-12 col-xl-8">
+    <div class="card app-card">
+      <div class="card-header bg-transparent d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <h2 class="h6 fw-semibold mb-0">Unit details</h2>
+        <span class="badge text-bg-<%= inventory.SERIAL_STATUS_BADGES[serial.status] || 'secondary' %>">
+          <%= inventory.SERIAL_STATUS_LABELS[serial.status] || serial.status %>
+        </span>
+      </div>
+      <div class="card-body p-4">
+        <dl class="row mb-0 small">
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Serial</dt>
+          <dd class="col-7 col-sm-8 font-monospace fw-semibold"><%= serial.serial %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Barcode / QR</dt>
+          <dd class="col-7 col-sm-8 font-monospace">
+            <% if (serial.barcode) { %>
+              <%= serial.barcode %>
+              <div class="text-muted small">Search this value on the Serial numbers page to find the unit.</div>
+            <% } else { %><span class="text-muted">—</span><% } %>
+          </dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Item</dt>
+          <dd class="col-7 col-sm-8">
+            <% if (serial.item) { %>
+              <a href="/items/<%= serial.item._id %>" class="text-decoration-none"><%= serial.item.sku %> — <%= serial.item.name %></a>
+              <div class="text-muted">
+                <%= inventory.ITEM_CATEGORY_LABELS[serial.item.category] || serial.item.category %>
+                <%= serial.item.brand ? ' · ' + serial.item.brand : '' %>
+                <%= serial.item.model ? ' · ' + serial.item.model : '' %>
+              </div>
+            <% } else { %>—<% } %>
+          </dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Supplier</dt>
+          <dd class="col-7 col-sm-8">
+            <% if (serial.supplier) { %>
+              <a href="/suppliers/<%= serial.supplier._id %>" class="text-decoration-none"><%= serial.supplier.name %></a>
+              <span class="text-muted font-monospace">· <%= serial.supplier.code %></span>
+            <% } else { %>—<% } %>
+          </dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Purchase order</dt>
+          <dd class="col-7 col-sm-8">
+            <% if (serial.purchase) { %>
+              <a href="/purchases/<%= serial.purchase._id %>" class="text-decoration-none font-monospace"><%= serial.purchase.number %></a>
+              <span class="text-muted small ms-1"><%= formatDate(serial.purchase.purchaseDate) %></span>
+              <% if (serial.purchase.invoiceNo) { %>
+                <div class="text-muted small">Invoice <%= serial.purchase.invoiceNo %></div>
+              <% } %>
+            <% } else { %>—<% } %>
+          </dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Current customer</dt>
+          <dd class="col-7 col-sm-8">
+            <% if (serial.customer) { %>
+              <a href="/customers/<%= serial.customer._id %>" class="text-decoration-none"><%= serial.customer.name %></a>
+              <div class="text-muted small"><%= serial.customer.phone || '' %></div>
+            <% } else { %>—<% } %>
+          </dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Project</dt>
+          <dd class="col-7 col-sm-8"><%= serial.project || '—' %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Location</dt>
+          <dd class="col-7 col-sm-8"><%= serial.location || '—' %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Received</dt>
+          <dd class="col-7 col-sm-8"><%= serial.receivedAt ? formatDate(serial.receivedAt) : '—' %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Product warranty</dt>
+          <dd class="col-7 col-sm-8"><%= serial.productWarrantyEnd ? formatDate(serial.productWarrantyEnd) : '—' %></dd>
+
+          <dt class="col-5 col-sm-4 text-muted fw-normal">Performance warranty</dt>
+          <dd class="col-7 col-sm-8"><%= serial.performanceWarrantyEnd ? formatDate(serial.performanceWarrantyEnd) : '—' %></dd>
+
+          <% if (serial.issuedAt) { %>
+            <dt class="col-5 col-sm-4 text-muted fw-normal">Issued</dt>
+            <dd class="col-7 col-sm-8"><%= formatDateTime(serial.issuedAt) %></dd>
+          <% } %>
+          <% if (serial.installedAt) { %>
+            <dt class="col-5 col-sm-4 text-muted fw-normal">Installed</dt>
+            <dd class="col-7 col-sm-8"><%= formatDateTime(serial.installedAt) %></dd>
+          <% } %>
+          <% if (serial.returnedAt) { %>
+            <dt class="col-5 col-sm-4 text-muted fw-normal">Returned</dt>
+            <dd class="col-7 col-sm-8"><%= formatDateTime(serial.returnedAt) %></dd>
+          <% } %>
+        </dl>
+
+        <% if (serial.notes) { %>
+          <hr class="my-4">
+          <h3 class="h6 fw-semibold text-uppercase text-muted mb-2">Notes</h3>
+          <p class="small mb-0" style="white-space:pre-line"><%= serial.notes %></p>
+        <% } %>
+      </div>
+    </div>
+
+    <div class="card app-card mt-3">
+      <div class="card-header bg-transparent d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <h2 class="h6 fw-semibold mb-0">Status history</h2>
+        <span class="badge text-bg-light border"><%= events.length %> event<%= events.length === 1 ? '' : 's' %></span>
+      </div>
+      <div class="card-body">
+        <% if (!events.length) { %>
+          <p class="text-muted small mb-0">No events recorded for this serial yet.</p>
+        <% } else { %>
+          <div class="timeline">
+            <% events.forEach(function (event, index) { %>
+              <div class="d-flex gap-3 <%= index === events.length - 1 ? '' : 'pb-3' %>">
+                <div class="flex-shrink-0">
+                  <span class="badge text-bg-<%= inventory.SERIAL_STATUS_BADGES[event.status] || 'secondary' %>">
+                    <i class="bi bi-circle-fill" style="font-size:.55rem"></i>
+                  </span>
+                </div>
+                <div class="flex-grow-1 border-bottom pb-2">
+                  <div class="d-flex flex-wrap gap-2 justify-content-between">
+                    <span class="fw-semibold"><%= inventory.SERIAL_STATUS_LABELS[event.status] || event.status %></span>
+                    <span class="text-muted small"><%= formatDateTime(event.at) %></span>
+                  </div>
+                  <div class="small text-muted">
+                    <% if (event.user) { %>By <%= event.user.name %><% } else { %>System<% } %>
+                    <% if (event.reference) { %> · <span class="font-monospace"><%= event.reference %></span><% } %>
+                  </div>
+                  <% if (event.note) { %><div class="small mt-1"><%= event.note %></div><% } %>
+                  <% if (event.project) { %><div class="small text-muted">Project: <%= event.project %></div><% } %>
+                  <% if (event.customer && customerMap[String(event.customer)]) { %>
+                    <div class="small text-muted">Customer: <%= customerMap[String(event.customer)] %></div>
+                  <% } %>
+                </div>
+              </div>
+            <% }); %>
+          </div>
+        <% } %>
+      </div>
+    </div>
+
+    <div class="card app-card mt-3">
+      <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">Linked stock movements</h2></div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle app-table mb-0">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th class="text-end">Qty</th>
+              <th class="text-end">Balance</th>
+              <th>Reference</th>
+              <th>User</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!movements.length) { %>
+              <tr><td colspan="6" class="text-center py-4 text-muted">No movements reference this serial.</td></tr>
+            <% } else { %>
+              <% movements.forEach(function (movement) { %>
+                <tr>
+                  <td class="small text-muted"><%= formatDate(movement.occurredAt) %></td>
+                  <td><span class="badge text-bg-<%= inventory.STOCK_MOVEMENT_BADGES[movement.type] || 'secondary' %>"><%= inventory.STOCK_MOVEMENT_LABELS[movement.type] || movement.type %></span></td>
+                  <td class="text-end fw-semibold <%= movement.qty > 0 ? 'text-success' : 'text-danger' %>"><%= movement.qty > 0 ? '+' : '' %><%= formatQty(movement.qty) %></td>
+                  <td class="text-end small"><%= formatQty(movement.balanceAfter) %></td>
+                  <td class="small font-monospace"><%= movement.reference || '—' %></td>
+                  <td class="small text-muted"><%= movement.createdBy ? movement.createdBy.name : 'System' %></td>
+                </tr>
+              <% }); %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-4">
+    <% if (canManage) { %>
+      <div class="card app-card">
+        <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">Change status</h2></div>
+        <div class="card-body">
+          <%- include('../partials/form-errors') %>
+          <form method="POST" action="/serials/<%= serial._id %>/status" data-serial-status-form data-once novalidate>
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+            <div class="mb-3">
+              <label for="status" class="form-label">New status</label>
+              <select class="form-select" id="status" name="status" required data-status-select>
+                <% inventory.SERIAL_STATUSES.forEach(function (status) { %>
+                  <option value="<%= status %>"<%= serial.status === status ? ' disabled' : '' %>>
+                    <%= inventory.SERIAL_STATUS_LABELS[status] %><%= serial.status === status ? ' (current)' : '' %>
+                  </option>
+                <% }); %>
+              </select>
+            </div>
+
+            <div class="mb-3 d-none" data-deployed-field>
+              <label for="customer" class="form-label">Customer</label>
+              <select class="form-select" id="customer" name="customer">
+                <option value="">No customer</option>
+                <% customers.forEach(function (customer) { %>
+                  <option value="<%= customer._id %>"<%= serial.customer && String(serial.customer._id) === String(customer._id) ? ' selected' : '' %>>
+                    <%= customer.name %><%= customer.phone ? ' — ' + customer.phone : '' %>
+                  </option>
+                <% }); %>
+              </select>
+            </div>
+
+            <div class="mb-3 d-none" data-deployed-field>
+              <label for="project" class="form-label">Project</label>
+              <input type="text" class="form-control" id="project" name="project"
+                     value="<%= serial.project || '' %>" maxlength="120" placeholder="Project or site name">
+            </div>
+
+            <div class="mb-3">
+              <label for="location" class="form-label">Location</label>
+              <input type="text" class="form-control" id="location" name="location"
+                     value="<%= serial.location || '' %>" maxlength="100">
+            </div>
+
+            <div class="mb-3">
+              <label for="note" class="form-label">Note</label>
+              <textarea class="form-control" id="note" name="note" rows="2" maxlength="300"
+                        placeholder="Optional note for the history"></textarea>
+            </div>
+
+            <div class="alert alert-light border small">
+              Moving a unit out of <strong>In stock</strong> / <strong>Defective</strong> decreases on-hand stock by one;
+              moving it back increases it.
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">
+              <i class="bi bi-arrow-repeat me-1"></i>Save status
+            </button>
+          </form>
+        </div>
+      </div>
+    <% } else { %>
+      <div class="alert alert-light border small">
+        <i class="bi bi-lock me-1"></i>Only the owner, manager and storekeeper can change a serial's status.
+      </div>
+    <% } %>
+
+    <% if (canManage && serial.item) { %>
+      <div class="card app-card mt-3">
+        <div class="card-body d-flex flex-wrap gap-2 justify-content-between align-items-center">
+          <div class="small">
+            <div class="fw-semibold">Register more units</div>
+            <div class="text-muted">Add serials and barcodes for <%= serial.item.sku %>.</div>
+          </div>
+          <a href="/serials/new?item=<%= serial.item._id %>" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-plus-lg me-1"></i>Register
+          </a>
+        </div>
+      </div>
+    <% } %>
+
+    <div class="card app-card bg-light-subtle mt-3">
+      <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">Status meaning</h2></div>
+      <div class="card-body small">
+        <div class="d-flex justify-content-between py-1"><span class="text-muted">In stock</span><span>On hand</span></div>
+        <div class="d-flex justify-content-between py-1"><span class="text-muted">Defective</span><span>On hand</span></div>
+        <div class="d-flex justify-content-between py-1"><span class="text-muted">Issued</span><span>Deployed</span></div>
+        <div class="d-flex justify-content-between py-1"><span class="text-muted">Installed</span><span>Deployed</span></div>
+        <div class="d-flex justify-content-between py-1"><span class="text-muted">Returned</span><span>Deployed / supplier</span></div>
+        <p class="text-muted mt-2 mb-0">
+          <strong>On hand</strong> statuses count towards the item's stock balance.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/inventory.js"></script>

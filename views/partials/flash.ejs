@@ -1,0 +1,19 @@
+<%
+  // Renders all flashed messages. Called from both the admin and auth layouts.
+  var groups = [
+    { key: 'success', alert: 'success', icon: 'bi-check-circle-fill' },
+    { key: 'error',   alert: 'danger',  icon: 'bi-exclamation-octagon-fill' },
+    { key: 'warning', alert: 'warning', icon: 'bi-exclamation-triangle-fill' },
+    { key: 'info',    alert: 'info',    icon: 'bi-info-circle-fill' }
+  ];
+  var flashBag = (typeof flash !== 'undefined' && flash) ? flash : {};
+%>
+<% groups.forEach(function (group) { %>
+  <% (flashBag[group.key] || []).forEach(function (message) { %>
+    <div class="alert alert-<%= group.alert %> alert-dismissible fade show d-flex align-items-start gap-2 app-alert" role="alert">
+      <i class="bi <%= group.icon %> mt-1 flex-shrink-0"></i>
+      <div class="flex-grow-1"><%= message %></div>
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+  <% }); %>
+<% }); %>

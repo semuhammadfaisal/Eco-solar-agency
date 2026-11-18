@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#073F68">
+  <title><%= typeof title !== 'undefined' && title ? title + ' · ' : '' %><%= appName %></title>
+
+  <link href="/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+  <link href="/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/app.css" rel="stylesheet">
+</head>
+<body class="auth-body">
+<div class="app-page-loader" aria-hidden="true"></div>
+
+<main class="auth-wrapper">
+  <div class="auth-card">
+    <section class="auth-visual" aria-label="Solar energy solutions">
+      <div class="auth-visual-content">
+        <h2>Control every solar project from one clear workspace.</h2>
+        <p>Connect sales, inventory, installation, recovery, and service teams with real-time business visibility.</p>
+        <div class="auth-feature-row" aria-label="Platform capabilities">
+          <span><i class="bi bi-sun"></i> Clean energy</span>
+          <span><i class="bi bi-graph-up-arrow"></i> Live insights</span>
+          <span><i class="bi bi-shield-check"></i> Secure access</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="auth-form-panel">
+      <div class="auth-form-wrap">
+        <div class="auth-mobile-brand">
+          <% if (settings.logoPath) { %>
+            <img src="<%= settings.logoPath %>" alt="<%= appName %>" class="auth-logo">
+          <% } else { %>
+            <span class="auth-icon"><i class="bi bi-sun-fill"></i></span>
+          <% } %>
+          <strong><%= appName %></strong>
+        </div>
+
+        <%- include('../partials/flash') %>
+        <%- body %>
+
+        <div class="auth-trust-note">
+          <i class="bi bi-lock-fill"></i>
+          Protected access for authorised Solar Agency staff
+        </div>
+      </div>
+
+      <footer class="auth-footer">
+        &copy; <%= year %> <%= settings.companyName || appName %>
+        <span>Solar Business Management System</span>
+      </footer>
+    </section>
+  </div>
+</main>
+
+<script defer src="/vendor/alpine/cdn.min.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

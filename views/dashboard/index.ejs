@@ -1,0 +1,896 @@
+<%
+  var firstName = currentUser.name.trim().split(/\s+/)[0];
+  var currentHour = new Date().getHours();
+  var greeting = currentHour < 12 ? 'Good morning' : (currentHour < 17 ? 'Good afternoon' : 'Good evening');
+%>
+
+<section class="dashboard-page">
+<!-- Welcome command bar -->
+<div class="dashboard-hero mb-4">
+  <div class="dashboard-hero-copy">
+    <div class="dashboard-hero-meta">
+      <span class="dashboard-role"><i class="bi <%= branchSession ? 'bi-shop' : 'bi-shield-check' %>"></i><%= branchSession ? ('Branch ' + currentUser.branchCode) : roleLabel %></span>
+      <span class="dashboard-live"><span></span>Live workspace</span>
+    </div>
+    <h1><%= greeting %>, <%= firstName %>.</h1>
+    <p><% if (branchSession) { %>Here is today's activity for <strong><%= currentUser.branchName %></strong>. Company-wide finance and CRM stay outside this workspace.<% } else { %>Here is the latest operational picture for <strong><%= settings.companyName || appName %></strong>.<% } %></p>
+    <div class="dashboard-identity">
+      <% if (branchSession) { %>
+        <span><i class="bi bi-shop"></i><%= currentUser.branchName %> · <%= currentUser.branchCode %></span>
+      <% } else { %>
+        <span><i class="bi bi-envelope"></i><%= currentUser.email %></span>
+      <% } %>
+      <span><i class="bi bi-clock"></i>Updated just now</span>
+    </div>
+  </div>
+
+  <div class="dashboard-quick-actions">
+      <% if (branchSession) { %>
+        <a href="/pos" class="dashboard-action dashboard-action-primary">
+          <span class="dashboard-action-icon"><i class="bi bi-cart-check"></i></span>
+          <span><strong>New POS sale</strong><small>Bill a walk-in customer</small></span>
+          <i class="bi bi-arrow-right dashboard-action-arrow"></i>
+        </a>
+        <a href="/branches/<%= currentUser.branch %>/stock" class="dashboard-action">
+          <span class="dashboard-action-icon"><i class="bi bi-box-seam"></i></span>
+          <span><strong>Branch stock</strong><small>Available units and prices</small></span>
+          <i class="bi bi-arrow-right dashboard-action-arrow"></i>
+        </a>
+        <a href="/transfers" class="dashboard-action">
+          <span class="dashboard-action-icon"><i class="bi bi-arrow-left-right"></i></span>
+          <span><strong>Stock transfers</strong><small>Incoming and outgoing</small></span>
+          <i class="bi bi-arrow-right dashboard-action-arrow"></i>
+        </a>
+      <% } %>
+      <% if (can('quotations.manage')) { %>
+        <a href="/quotations/new" class="dashboard-action dashboard-action-primary">
+          <span class="dashboard-action-icon"><i class="bi bi-file-earmark-plus"></i></span>
+          <span><strong>New quotation</strong><small>Build a solar proposal</small></span>
+          <i class="bi bi-arrow-right dashboard-action-arrow"></i>
+        </a>
+      <% } %>
+      <% if (can('installments.collect')) { %>
+        <a href="/installments/calendar" class="dashboard-action">
+          <span class="dashboard-action-icon"><i class="bi bi-calendar-check"></i></span>
+          <span><strong>Collections</strong><small>Open payment calendar</small></span>
+          <i class="bi bi-arrow-right dashboard-action-arrow"></i>
+        </a>
+      <% } %>
+      <% if (can('accounting.view')) { %>
+        <a href="/accounting/dashboard" class="dashboard-action">
+          <span class="dashboard-action-icon"><i class="bi bi-graph-up-arrow"></i></span>
+          <span><strong>Accounts</strong><small>View financial position</small></span>
+          <i class="bi bi-arrow-right dashboard-action-arrow"></i>
+        </a>
+      <% } %>
+  </div>
+  <span class="dashboard-sun-orbit" aria-hidden="true"><i class="bi bi-sun-fill"></i></span>
+</div>
+
+<% if (stats.commerce && can('pos.view')) { %>
+<div class="row g-3 mb-4">
+  <div class="col-6 col-xl-2"><div class="card app-card p-3 h-100"><div class="small text-muted">Active Branches</div><div class="h4 mb-0"><%= stats.commerce.branchCount %></div></div></div>
+  <div class="col-6 col-xl-2"><div class="card app-card p-3 h-100"><div class="small text-muted">Solar Brands</div><div class="h4 mb-0"><%= stats.commerce.brandCount %></div></div></div>
+  <div class="col-6 col-xl-2"><div class="card app-card p-3 h-100"><div class="small text-muted">Available Units</div><div class="h4 mb-0"><%= formatQty(stats.commerce.totalUnits) %></div></div></div>
+  <div class="col-6 col-xl-2"><div class="card app-card p-3 h-100"><div class="small text-muted">Today's POS Sales</div><div class="h5 mb-0 text-success"><%= formatPKR(stats.commerce.todaySalesPaisa) %></div><div class="small text-muted"><%= stats.commerce.todayTransactions %> bill(s)</div></div></div>
+  <div class="col-6 col-xl-2"><div class="card app-card p-3 h-100"><div class="small text-muted">Today's Discounts</div><div class="h5 mb-0"><%= formatPKR(stats.commerce.todayDiscountsPaisa) %></div></div></div>
+  <div class="col-6 col-xl-2"><div class="card app-card p-3 h-100"><div class="small text-muted">Low Stock</div><div class="h4 mb-0 <%= stats.commerce.lowStockCount ? 'text-danger' : 'text-success' %>"><%= stats.commerce.lowStockCount %></div></div></div>
+</div>
+<% if (stats.commerce.branchSales.length) { %><div class="card app-card mb-4"><div class="card-header bg-transparent"><h2 class="h6 mb-0">Today's Branch-wise POS Sales</h2></div><div class="table-responsive"><table class="table mb-0"><thead><tr><th>Branch</th><th class="text-end">Bills</th><th class="text-end">Sales</th><% if(can('profit.view')){ %><th class="text-end">Profit</th><% } %></tr></thead><tbody><% stats.commerce.branchSales.forEach(function(row){ %><tr><td><%= row.name %></td><td class="text-end"><%= row.count %></td><td class="text-end fw-semibold"><%= formatPKR(row.salesPaisa) %></td><% if(can('profit.view')){ %><td class="text-end"><%= formatPKR(row.profitPaisa) %></td><% } %></tr><% }) %></tbody></table></div></div><% } %>
+<% } %>
+
+<% if (stats.isOwnerOrManager && stats.kpis) { %>
+  <!-- ====================================================================== -->
+  <!-- 1. OWNER & MANAGER EXECUTIVE DASHBOARD                                 -->
+  <!-- ====================================================================== -->
+
+  <!-- Top KPI Metric Cards (Row 1) -->
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card app-card stat-card h-100 border-start border-4 border-success">
+        <div class="card-body">
+          <div class="stat-icon text-bg-success-subtle text-success"><i class="bi bi-cash-coin"></i></div>
+          <div class="stat-value text-success"><%= formatPKR(stats.kpis.monthSalesPaisa) %></div>
+          <div class="stat-label">Month Sales Volume</div>
+          <div class="small text-muted mt-1">Today: <strong><%= formatPKR(stats.kpis.todaySalesPaisa) %></strong></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card app-card stat-card h-100 border-start border-4 border-primary">
+        <div class="card-body">
+          <div class="stat-icon text-bg-primary-subtle text-primary"><i class="bi bi-wallet-fill"></i></div>
+          <div class="stat-value text-primary"><%= formatPKR(stats.kpis.monthCollectionsPaisa) %></div>
+          <div class="stat-label">Month Collections Received</div>
+          <div class="small text-muted mt-1">Today: <strong><%= formatPKR(stats.kpis.todayCollectionsPaisa) %></strong></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card app-card stat-card h-100 border-start border-4 border-danger">
+        <div class="card-body">
+          <div class="stat-icon text-bg-danger-subtle text-danger"><i class="bi bi-hourglass-split"></i></div>
+          <div class="stat-value text-danger"><%= formatPKR(stats.kpis.overdueBalancePaisa) %></div>
+          <div class="stat-label">Overdue Portfolio (Recovery)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card app-card stat-card h-100 border-start border-4 border-info">
+        <div class="card-body">
+          <div class="stat-icon text-bg-info-subtle text-info"><i class="bi bi-graph-up-arrow"></i></div>
+          <div class="stat-value <%= stats.kpis.monthNetProfitPaisa >= 0 ? 'text-dark' : 'text-danger' %>">
+            <%= formatPKR(stats.kpis.monthNetProfitPaisa) %>
+          </div>
+          <div class="stat-label">Month Net Profit (<%= stats.kpis.netMarginPercent %>% Margin)</div>
+          <div class="small text-muted mt-1"><a href="/accounting/profit-loss" class="text-decoration-none">View P&amp;L &rarr;</a></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Operational Health Cards (Row 2) -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+      <div class="card app-card p-3 border-secondary-subtle h-100">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <span class="small text-muted text-uppercase fw-semibold">Inventory Valuation</span>
+          <i class="bi bi-box-seam text-primary fs-5"></i>
+        </div>
+        <div class="fs-5 fw-bold text-dark"><%= formatPKR(stats.kpis.stockValuationPaisa) %></div>
+        <div class="small text-danger fw-semibold mt-1">
+          <% if (stats.kpis.lowStockCount > 0) { %>
+            <i class="bi bi-exclamation-triangle me-1"></i><%= stats.kpis.lowStockCount %> Items Low on Stock
+          <% } else { %>
+            <span class="text-success"><i class="bi bi-check2 me-1"></i>Stock Levels Healthy</span>
+          <% } %>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-6 col-lg-3">
+      <div class="card app-card p-3 border-secondary-subtle h-100">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <span class="small text-muted text-uppercase fw-semibold">Pending Installations</span>
+          <i class="bi bi-tools text-warning fs-5"></i>
+        </div>
+        <div class="fs-5 fw-bold text-dark"><%= stats.kpis.pendingInstallationsCount %> Systems</div>
+        <div class="small text-muted mt-1"><a href="/installations" class="text-decoration-none">Active Projects &rarr;</a></div>
+      </div>
+    </div>
+
+    <div class="col-6 col-lg-3">
+      <div class="card app-card p-3 border-secondary-subtle h-100">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <span class="small text-muted text-uppercase fw-semibold">Open Complaints</span>
+          <i class="bi bi-headset text-danger fs-5"></i>
+        </div>
+        <div class="fs-5 fw-bold text-dark"><%= stats.kpis.openComplaintsCount %> Tickets</div>
+        <div class="small text-muted mt-1"><a href="/complaints" class="text-decoration-none">Support Desk &rarr;</a></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Operational Alerts Panel -->
+  <% if ((stats.alerts.upcomingCheques && stats.alerts.upcomingCheques.length) || (stats.alerts.urgentComplaints && stats.alerts.urgentComplaints.length) || (stats.alerts.lowStockItems && stats.alerts.lowStockItems.length) || stats.alerts.overdueInstallmentsCount > 0) { %>
+    <div class="card app-card border-warning mb-4 shadow-sm">
+      <div class="card-header bg-warning-subtle py-3 d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center gap-2">
+          <i class="bi bi-bell-fill text-warning-emphasis fs-5"></i>
+          <h2 class="h6 fw-bold mb-0 text-warning-emphasis">Live Operational Attention Required</h2>
+        </div>
+        <span class="badge bg-warning text-dark">Action Alerts</span>
+      </div>
+      <div class="card-body p-3">
+        <div class="row g-3">
+          <% if (stats.alerts.upcomingCheques && stats.alerts.upcomingCheques.length) { %>
+            <div class="col-12 col-md-6 col-lg-3">
+              <div class="p-3 bg-light rounded border h-100">
+                <div class="fw-bold text-dark small"><i class="bi bi-journal-check text-primary me-1"></i>Cheques Due (7 Days)</div>
+                <div class="fs-5 fw-bold text-primary mt-1"><%= stats.alerts.upcomingCheques.length %> Cheques</div>
+                <a href="/installments/cheques" class="small text-decoration-none mt-2 d-inline-block">View register &rarr;</a>
+              </div>
+            </div>
+          <% } %>
+
+          <% if (stats.alerts.urgentComplaints && stats.alerts.urgentComplaints.length) { %>
+            <div class="col-12 col-md-6 col-lg-3">
+              <div class="p-3 bg-light rounded border h-100">
+                <div class="fw-bold text-dark small"><i class="bi bi-exclamation-octagon text-danger me-1"></i>Urgent Complaints</div>
+                <div class="fs-5 fw-bold text-danger mt-1"><%= stats.alerts.urgentComplaints.length %> Tickets</div>
+                <a href="/complaints?priority=urgent" class="small text-decoration-none mt-2 d-inline-block">Dispatch technician &rarr;</a>
+              </div>
+            </div>
+          <% } %>
+
+          <% if (stats.alerts.lowStockItems && stats.alerts.lowStockItems.length) { %>
+            <div class="col-12 col-md-6 col-lg-3">
+              <div class="p-3 bg-light rounded border h-100">
+                <div class="fw-bold text-dark small"><i class="bi bi-box-arrow-in-down text-warning-emphasis me-1"></i>Critical Low Stock</div>
+                <div class="fs-5 fw-bold text-warning-emphasis mt-1"><%= stats.alerts.lowStockItems.length %> SKUs</div>
+                <a href="/stock/valuation" class="small text-decoration-none mt-2 d-inline-block">Reorder stock &rarr;</a>
+              </div>
+            </div>
+          <% } %>
+
+          <% if (stats.alerts.overdueInstallmentsCount > 0) { %>
+            <div class="col-12 col-md-6 col-lg-3">
+              <div class="p-3 bg-light rounded border h-100">
+                <div class="fw-bold text-dark small"><i class="bi bi-telephone-outbound text-danger me-1"></i>Overdue Installments</div>
+                <div class="fs-5 fw-bold text-danger mt-1"><%= stats.alerts.overdueInstallmentsCount %> Accounts</div>
+                <a href="/recovery/today" class="small text-decoration-none mt-2 d-inline-block">Start recovery queue &rarr;</a>
+              </div>
+            </div>
+          <% } %>
+        </div>
+      </div>
+    </div>
+  <% } %>
+
+  <!-- Chart.js Visualizations (Row 1) -->
+  <div class="row g-4 mb-4">
+    <!-- Chart 1: Sales vs Collections Trend -->
+    <div class="col-12 col-lg-8">
+      <div class="card app-card shadow-sm h-100">
+        <div class="card-header bg-body-tertiary py-3 d-flex justify-content-between align-items-center">
+          <h2 class="h6 fw-bold mb-0"><i class="bi bi-bar-chart-line me-2"></i>Sales Contracts vs. Collections Trend (Last 6 Months)</h2>
+        </div>
+        <div class="card-body p-3">
+          <div style="position: relative; height: 280px;">
+            <canvas id="salesVsCollectionsChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chart 2: Delinquency Aging Doughnut -->
+    <div class="col-12 col-lg-4">
+      <div class="card app-card shadow-sm h-100">
+        <div class="card-header bg-body-tertiary py-3 d-flex justify-content-between align-items-center">
+          <h2 class="h6 fw-bold mb-0"><i class="bi bi-pie-chart me-2"></i>Accounts Receivable Aging</h2>
+        </div>
+        <div class="card-body p-3 d-flex flex-column align-items-center justify-content-center">
+          <div style="position: relative; height: 220px; width: 100%;">
+            <canvas id="agingDoughnutChart"></canvas>
+          </div>
+          <div class="text-center mt-2 small text-muted">
+            Total Overdue: <strong class="text-danger"><%= formatPKR(stats.charts.aging.totalOverduePaisa) %></strong>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chart.js Visualizations (Row 2) -->
+  <div class="row g-4 mb-4">
+    <!-- Chart 3: Monthly Net Profit -->
+    <div class="col-12 col-lg-6">
+      <div class="card app-card shadow-sm h-100">
+        <div class="card-header bg-body-tertiary py-3 d-flex justify-content-between align-items-center">
+          <h2 class="h6 fw-bold mb-0"><i class="bi bi-graph-up me-2"></i>Monthly Net Operating Profit (PKR)</h2>
+          <a href="/accounting/profit-loss" class="small text-decoration-none">P&amp;L Statement</a>
+        </div>
+        <div class="card-body p-3">
+          <div style="position: relative; height: 240px;">
+            <canvas id="monthlyProfitChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chart 4: Top Sales Performers Leaderboard -->
+    <div class="col-12 col-lg-6">
+      <div class="card app-card shadow-sm h-100">
+        <div class="card-header bg-body-tertiary py-3 d-flex justify-content-between align-items-center">
+          <h2 class="h6 fw-bold mb-0"><i class="bi bi-trophy text-warning me-2"></i>Top Sales Performers (This Month)</h2>
+          <a href="/quotations" class="small text-decoration-none">All Quotes</a>
+        </div>
+        <div class="card-body p-3">
+          <div style="position: relative; height: 240px;">
+            <canvas id="topSalespeopleChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chart.js Script Initializer -->
+  <script src="/vendor/chart/chart.umd.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const salesVsCollectionsData = <%- JSON.stringify(stats.charts.salesVsCollections || []) %>;
+      const profitData = <%- JSON.stringify(stats.charts.monthlyProfit || []) %>;
+      const topSalespeopleData = <%- JSON.stringify(stats.charts.topSalespeople || []) %>;
+      const agingData = <%- JSON.stringify(stats.charts.aging || {}) %>;
+
+      // 1. Sales vs Collections Chart
+      const ctx1 = document.getElementById('salesVsCollectionsChart');
+      if (ctx1) {
+        new Chart(ctx1, {
+          type: 'bar',
+          data: {
+            labels: salesVsCollectionsData.map(d => d.month),
+            datasets: [
+              {
+                label: 'Sales Volume (PKR)',
+                data: salesVsCollectionsData.map(d => d.salesPaisa / 100),
+                backgroundColor: 'rgba(39, 135, 25, 0.82)',
+                borderRadius: 7,
+              },
+              {
+                label: 'Collections (PKR)',
+                data: salesVsCollectionsData.map(d => d.collectionsPaisa / 100),
+                backgroundColor: 'rgba(7, 63, 104, 0.82)',
+                borderRadius: 7,
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'top' },
+              tooltip: {
+                callbacks: {
+                  label: function(c) {
+                    return c.dataset.label + ': ' + Number(c.raw).toLocaleString() + ' PKR';
+                  }
+                }
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  callback: function(v) { return (v / 1000).toLocaleString() + 'k'; }
+                }
+              }
+            }
+          }
+        });
+      }
+
+      // 2. Delinquency Aging Doughnut
+      const ctx2 = document.getElementById('agingDoughnutChart');
+      if (ctx2) {
+        new Chart(ctx2, {
+          type: 'doughnut',
+          data: {
+            labels: ['Current', '1-30 Days', '31-60 Days', '61-90 Days', '90+ Days'],
+            datasets: [{
+              data: [
+                (agingData.currentPaisa || 0) / 100,
+                (agingData.d1_30Paisa || 0) / 100,
+                (agingData.d31_60Paisa || 0) / 100,
+                (agingData.d61_90Paisa || 0) / 100,
+                (agingData.d90PlusPaisa || 0) / 100
+              ],
+              backgroundColor: ['#278719', '#FFA500', '#e57f15', '#d94b3d', '#8f2537'],
+              borderColor: '#ffffff',
+              borderWidth: 3
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'bottom', labels: { boxWidth: 12 } },
+              tooltip: {
+                callbacks: {
+                  label: function(c) {
+                    return c.label + ': ' + Number(c.raw).toLocaleString() + ' PKR';
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
+
+      // 3. Monthly Net Profit Bar Chart
+      const ctx3 = document.getElementById('monthlyProfitChart');
+      if (ctx3) {
+        new Chart(ctx3, {
+          type: 'bar',
+          data: {
+            labels: profitData.map(d => d.month),
+            datasets: [{
+              label: 'Net Operating Profit (PKR)',
+              data: profitData.map(d => d.profitPaisa / 100),
+              backgroundColor: profitData.map(d => d.profitPaisa >= 0 ? 'rgba(39, 135, 25, 0.82)' : 'rgba(217, 75, 61, 0.82)'),
+              borderRadius: 7
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: function(c) {
+                    return 'Net Profit: ' + Number(c.raw).toLocaleString() + ' PKR';
+                  }
+                }
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  callback: function(v) { return (v / 1000).toLocaleString() + 'k'; }
+                }
+              }
+            }
+          }
+        });
+      }
+
+      // 4. Top Sales Performers Horizontal Bar
+      const ctx4 = document.getElementById('topSalespeopleChart');
+      if (ctx4) {
+        new Chart(ctx4, {
+          type: 'bar',
+          indexAxis: 'y',
+          data: {
+            labels: topSalespeopleData.map(d => d.name),
+            datasets: [{
+              label: 'Volume (PKR)',
+              data: topSalespeopleData.map(d => d.volumePaisa / 100),
+              backgroundColor: 'rgba(255, 165, 0, 0.82)',
+              borderRadius: 7
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: function(c) {
+                    return 'Won Volume: ' + Number(c.raw).toLocaleString() + ' PKR';
+                  }
+                }
+              }
+            },
+            scales: {
+              x: {
+                beginAtZero: true,
+                ticks: {
+                  callback: function(v) { return (v / 1000).toLocaleString() + 'k'; }
+                }
+              }
+            }
+          }
+        });
+      }
+    });
+  </script>
+
+<% } else if (stats.isSales) { %>
+  <!-- ====================================================================== -->
+  <!-- 2. SALES ROLE DASHBOARD (STRICTLY NO COST/PROFIT LEAKS)                -->
+  <!-- ====================================================================== -->
+
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card app-card stat-card h-100">
+        <div class="card-body">
+          <div class="stat-icon text-bg-success-subtle text-success"><i class="bi bi-award"></i></div>
+          <div class="stat-value text-success"><%= stats.salesKpis.myWonSalesCount %></div>
+          <div class="stat-label">Won Contracts</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card app-card stat-card h-100">
+        <div class="card-body">
+          <div class="stat-icon text-bg-info-subtle text-info"><i class="bi bi-file-earmark-text"></i></div>
+          <div class="stat-value"><%= stats.salesKpis.myQuotesCount %></div>
+          <div class="stat-label">My Quotations</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card app-card stat-card h-100">
+        <div class="card-body">
+          <div class="stat-icon text-bg-warning-subtle text-warning-emphasis"><i class="bi bi-cash-stack"></i></div>
+          <div class="stat-value text-dark"><%= formatPKR(stats.salesKpis.mySalesVolumePaisa) %></div>
+          <div class="stat-label">My Total Sales Volume</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <div class="col-12">
+      <div class="card app-card shadow-sm h-100">
+        <div class="card-header bg-body-tertiary py-3 d-flex justify-content-between align-items-center">
+          <h2 class="h6 fw-bold mb-0"><i class="bi bi-file-earmark-text text-success me-2"></i>My Recent Quotations</h2>
+          <a href="/quotations" class="small text-decoration-none">All Quotes</a>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0 app-table">
+            <thead class="table-light">
+              <tr>
+                <th>Quote #</th>
+                <th>Client</th>
+                <th>Capacity</th>
+                <th class="text-end">Price (PKR)</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (stats.myRecentQuotes && stats.myRecentQuotes.length) { %>
+                <% stats.myRecentQuotes.forEach(function(q) { %>
+                  <tr>
+                    <td class="font-monospace fw-bold"><%= q.quotationNumber %></td>
+                    <td><%= q.customerName %></td>
+                    <td><%= q.capacityKw %> kW</td>
+                    <td class="text-end fw-bold font-monospace"><%= formatPKR(q.finalPricePaisa) %></td>
+                    <td><span class="badge text-bg-light border text-uppercase small"><%= q.status %></span></td>
+                  </tr>
+                <% }); %>
+              <% } else { %>
+                <tr><td colspan="5" class="text-center py-4 text-muted small">No recent quotations.</td></tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<% } else if (stats.isTechnician) { %>
+  <!-- ====================================================================== -->
+  <!-- 3. TECHNICIAN ROLE DASHBOARD                                           -->
+  <!-- ====================================================================== -->
+
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-sm-6">
+      <div class="card app-card stat-card h-100 border-start border-4 border-warning">
+        <div class="card-body">
+          <div class="stat-icon text-bg-warning-subtle text-warning-emphasis"><i class="bi bi-tools"></i></div>
+          <div class="stat-value"><%= stats.technicianKpis.activeInstallationsCount %></div>
+          <div class="stat-label">Assigned Installations Active</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-sm-6">
+      <div class="card app-card stat-card h-100 border-start border-4 border-danger">
+        <div class="card-body">
+          <div class="stat-icon text-bg-danger-subtle text-danger"><i class="bi bi-headset"></i></div>
+          <div class="stat-value text-danger"><%= stats.technicianKpis.openTicketsCount %></div>
+          <div class="stat-label">Assigned Complaint Tickets</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <div class="col-12 col-lg-6">
+      <div class="card app-card shadow-sm h-100">
+        <div class="card-header bg-body-tertiary py-3 d-flex justify-content-between align-items-center">
+          <h2 class="h6 fw-bold mb-0"><i class="bi bi-tools text-warning me-2"></i>My Field Installations</h2>
+        </div>
+        <div class="card-body p-0">
+          <% if (stats.myInstallations && stats.myInstallations.length) { %>
+            <div class="list-group list-group-flush">
+              <% stats.myInstallations.forEach(function(inst) { %>
+                <a href="/installations/<%= inst._id %>" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                  <div>
+                    <div class="fw-bold"><%= inst.installationNumber %> — <%= inst.customer ? inst.customer.name : 'Client' %></div>
+                    <div class="small text-muted"><%= inst.customer ? (inst.customer.address + ', ' + inst.customer.city) : '' %></div>
+                  </div>
+                  <span class="badge text-bg-light border text-uppercase small"><%= inst.status %></span>
+                </a>
+              <% }); %>
+            </div>
+          <% } else { %>
+            <div class="text-center py-5 text-muted small">No active installation jobs assigned.</div>
+          <% } %>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+      <div class="card app-card shadow-sm h-100">
+        <div class="card-header bg-body-tertiary py-3 d-flex justify-content-between align-items-center">
+          <h2 class="h6 fw-bold mb-0"><i class="bi bi-headset text-danger me-2"></i>My Service Tickets</h2>
+          <a href="/complaints" class="small text-decoration-none">All Tickets</a>
+        </div>
+        <div class="card-body p-0">
+          <% if (stats.myComplaints && stats.myComplaints.length) { %>
+            <div class="list-group list-group-flush">
+              <% stats.myComplaints.forEach(function(cmp) { %>
+                <a href="/complaints/<%= cmp._id %>" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                  <div>
+                    <div class="fw-bold"><%= cmp.ticketNumber %> — <%= cmp.customer ? cmp.customer.name : 'Client' %></div>
+                    <div class="small text-muted"><%= cmp.issueType %> · Priority: <%= cmp.priority %></div>
+                  </div>
+                  <span class="badge bg-danger text-white small">Action Required</span>
+                </a>
+              <% }); %>
+            </div>
+          <% } else { %>
+            <div class="text-center py-5 text-muted small">No pending service tickets assigned.</div>
+          <% } %>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<% } else if (stats.isStorekeeper) { %>
+  <!-- ====================================================================== -->
+  <!-- 4. STOREKEEPER ROLE DASHBOARD                                          -->
+  <!-- ====================================================================== -->
+
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card app-card stat-card h-100">
+        <div class="card-body">
+          <div class="stat-icon text-bg-danger-subtle text-danger"><i class="bi bi-exclamation-triangle"></i></div>
+          <div class="stat-value text-danger"><%= stats.storekeeperKpis.lowStockCount %></div>
+          <div class="stat-label">Low Stock SKUs</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card app-card stat-card h-100">
+        <div class="card-body">
+          <div class="stat-icon text-bg-primary-subtle text-primary"><i class="bi bi-truck"></i></div>
+          <div class="stat-value"><%= stats.storekeeperKpis.pendingPurchasesCount %></div>
+          <div class="stat-label">Pending PO Receipts (GRN)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card app-card stat-card h-100">
+        <div class="card-body">
+          <div class="stat-icon text-bg-info-subtle text-info"><i class="bi bi-arrow-left-right"></i></div>
+          <div class="stat-value"><%= stats.storekeeperKpis.todayMovementsCount %></div>
+          <div class="stat-label">Stock Movements Today</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card app-card stat-card h-100">
+        <div class="card-body">
+          <div class="stat-icon text-bg-success-subtle text-success"><i class="bi bi-box-seam"></i></div>
+          <div class="stat-value text-dark"><%= formatPKR(stats.storekeeperKpis.stockValuationPaisa) %></div>
+          <div class="stat-label">Total Stock Valuation</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card app-card shadow-sm mb-4">
+    <div class="card-header bg-body-tertiary py-3 d-flex justify-content-between align-items-center">
+      <h2 class="h6 fw-bold mb-0"><i class="bi bi-exclamation-octagon text-danger me-2"></i>Critical Low Stock Items</h2>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 app-table">
+        <thead class="table-light">
+          <tr>
+            <th>SKU</th>
+            <th>Item Name</th>
+            <th>Category</th>
+            <th class="text-center">Current Stock</th>
+            <th class="text-center">Min Stock</th>
+            <th>Location</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (stats.lowStockItems && stats.lowStockItems.length) { %>
+            <% stats.lowStockItems.forEach(function(it) { %>
+              <tr>
+                <td class="font-monospace fw-bold"><%= it.sku %></td>
+                <td><%= it.name %></td>
+                <td><span class="badge text-bg-light border text-uppercase small"><%= it.category %></span></td>
+                <td class="text-center font-monospace fw-bold text-danger"><%= it.currentStock %> <%= it.unit %></td>
+                <td class="text-center font-monospace text-muted"><%= it.minStock %> <%= it.unit %></td>
+                <td class="small text-muted"><%= it.location || 'Warehouse' %></td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr><td colspan="6" class="text-center py-4 text-muted small">All inventory items are above minimum stock levels.</td></tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+<% } else if (stats.isSurveyor) { %>
+  <!-- ====================================================================== -->
+  <!-- 5. SURVEYOR ROLE DASHBOARD                                             -->
+  <!-- ====================================================================== -->
+
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-sm-4">
+      <div class="card app-card stat-card h-100 border-start border-4 border-primary">
+        <div class="card-body">
+          <div class="stat-icon text-bg-primary-subtle text-primary"><i class="bi bi-calendar-event"></i></div>
+          <div class="stat-value"><%= stats.surveyorKpis.todaySurveysCount %></div>
+          <div class="stat-label">Site Surveys Today</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-sm-4">
+      <div class="card app-card stat-card h-100 border-start border-4 border-warning">
+        <div class="card-body">
+          <div class="stat-icon text-bg-warning-subtle text-warning-emphasis"><i class="bi bi-clipboard-data"></i></div>
+          <div class="stat-value"><%= stats.surveyorKpis.pendingSurveysCount %></div>
+          <div class="stat-label">Pending Field Surveys</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-sm-4">
+      <div class="card app-card stat-card h-100 border-start border-4 border-success">
+        <div class="card-body">
+          <div class="stat-icon text-bg-success-subtle text-success"><i class="bi bi-check-circle"></i></div>
+          <div class="stat-value text-success"><%= stats.surveyorKpis.completedMonthCount %></div>
+          <div class="stat-label">Completed Surveys This Month</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card app-card shadow-sm mb-4">
+    <div class="card-header bg-body-tertiary py-3 d-flex justify-content-between align-items-center">
+      <h2 class="h6 fw-bold mb-0"><i class="bi bi-geo-alt text-primary me-2"></i>My Scheduled Surveys</h2>
+      <a href="/surveys" class="small text-decoration-none">All Surveys</a>
+    </div>
+    <div class="card-body p-0">
+      <% if (stats.pendingSurveys && stats.pendingSurveys.length) { %>
+        <div class="list-group list-group-flush">
+          <% stats.pendingSurveys.forEach(function(sv) { %>
+            <a href="/surveys/<%= sv._id %>" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+              <div>
+                <div class="fw-bold"><%= sv.surveyNumber %> — <%= sv.customer ? sv.customer.name : 'Customer' %></div>
+                <div class="small text-muted"><%= sv.customer ? (sv.customer.address + ', ' + sv.customer.city) : '' %></div>
+              </div>
+              <span class="badge text-bg-primary text-uppercase small"><%= sv.status %></span>
+            </a>
+          <% }); %>
+        </div>
+      <% } else { %>
+        <div class="text-center py-5 text-muted small">No scheduled surveys pending field visit.</div>
+      <% } %>
+    </div>
+  </div>
+
+<% } else if (stats.isAccountant) { %>
+  <!-- ====================================================================== -->
+  <!-- 6. ACCOUNTANT DASHBOARD                                                -->
+  <!-- ====================================================================== -->
+
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card app-card stat-card h-100 border-start border-4 border-success">
+        <div class="card-body">
+          <div class="stat-icon text-bg-success-subtle text-success"><i class="bi bi-cash-stack"></i></div>
+          <div class="stat-value text-success"><%= formatPKR(stats.accountantKpis.cashInHandPaisa) %></div>
+          <div class="stat-label">Cash in Hand (Safe)</div>
+          <div class="small text-muted mt-1"><a href="/accounting/cash-book" class="text-decoration-none">Cash Book &rarr;</a></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card app-card stat-card h-100 border-start border-4 border-primary">
+        <div class="card-body">
+          <div class="stat-icon text-bg-primary-subtle text-primary"><i class="bi bi-bank"></i></div>
+          <div class="stat-value text-primary"><%= formatPKR(stats.accountantKpis.bankBalancePaisa) %></div>
+          <div class="stat-label">Bank Alfalah</div>
+          <div class="small text-muted mt-1"><a href="/accounting/bank-book" class="text-decoration-none">Bank Book &rarr;</a></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card app-card stat-card h-100 border-start border-4 border-info">
+        <div class="card-body">
+          <div class="stat-icon text-bg-info-subtle text-info"><i class="bi bi-arrow-down-left-circle"></i></div>
+          <div class="stat-value text-dark"><%= formatPKR(stats.accountantKpis.totalReceivablesPaisa) %></div>
+          <div class="stat-label">Total Receivables (AR)</div>
+          <div class="small text-muted mt-1"><a href="/accounting/receivables" class="text-decoration-none">AR Ledger &rarr;</a></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card app-card stat-card h-100 border-start border-4 border-warning">
+        <div class="card-body">
+          <div class="stat-icon text-bg-warning-subtle text-warning-emphasis"><i class="bi bi-arrow-up-right-circle"></i></div>
+          <div class="stat-value text-warning-emphasis"><%= formatPKR(stats.accountantKpis.totalPayablesPaisa) %></div>
+          <div class="stat-label">Total Payables (AP)</div>
+          <div class="small text-muted mt-1"><a href="/accounting/payables" class="text-decoration-none">AP Ledger &rarr;</a></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <div class="col-12 col-lg-6">
+      <div class="card app-card shadow-sm h-100">
+        <div class="card-header bg-body-tertiary py-3 d-flex justify-content-between align-items-center">
+          <h2 class="h6 fw-bold mb-0"><i class="bi bi-receipt text-warning-emphasis me-2"></i>Pending Supplier Bills</h2>
+          <a href="/accounting/supplier-payments" class="btn btn-sm btn-primary">Pay Vendor</a>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0 app-table">
+            <thead class="table-light">
+              <tr>
+                <th>PO #</th>
+                <th>Supplier</th>
+                <th class="text-end">Balance Due</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (stats.pendingBills && stats.pendingBills.length) { %>
+                <% stats.pendingBills.forEach(function(p) { %>
+                  <tr>
+                    <td class="font-monospace fw-bold"><%= p.number %></td>
+                    <td><%= p.supplier ? p.supplier.name : 'Supplier' %></td>
+                    <td class="text-end font-monospace fw-bold text-danger"><%= formatPKR(p.totalPaisa - (p.paidPaisa || 0)) %></td>
+                    <td><span class="badge text-bg-warning small text-uppercase"><%= p.paymentStatus %></span></td>
+                  </tr>
+                <% }); %>
+              <% } else { %>
+                <tr><td colspan="4" class="text-center py-4 text-muted small">No pending supplier bills.</td></tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+      <div class="card app-card shadow-sm h-100">
+        <div class="card-header bg-body-tertiary py-3 d-flex justify-content-between align-items-center">
+          <h2 class="h6 fw-bold mb-0"><i class="bi bi-journal-check text-primary me-2"></i>Cheques Maturing in 7 Days</h2>
+          <a href="/installments/cheques" class="small text-decoration-none">Cheque Register</a>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0 app-table">
+            <thead class="table-light">
+              <tr>
+                <th>Cheque #</th>
+                <th>Customer</th>
+                <th>Maturity Date</th>
+                <th class="text-end">Amount (PKR)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (stats.upcomingCheques && stats.upcomingCheques.length) { %>
+                <% stats.upcomingCheques.forEach(function(ch) { %>
+                  <tr>
+                    <td class="font-monospace fw-bold"><%= ch.chequeNumber %></td>
+                    <td><%= ch.customer ? ch.customer.name : 'Client' %></td>
+                    <td><%= formatDate(ch.chequeDate) %></td>
+                    <td class="text-end font-monospace fw-bold text-primary"><%= formatPKR(ch.amountPaisa) %></td>
+                  </tr>
+                <% }); %>
+              <% } else { %>
+                <tr><td colspan="4" class="text-center py-4 text-muted small">No cheques maturing in the next 7 days.</td></tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<% } %>
+</section>

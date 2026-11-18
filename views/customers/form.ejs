@@ -1,0 +1,185 @@
+<%
+  var initialType = old('type', customer ? customer.type : 'residential');
+  var initialSource = old('source', customer ? customer.source : 'other');
+  var initialDisco = old('disco', customer ? customer.disco : '');
+  var gpsLat = old('gpsLat', customer && customer.gps ? customer.gps.lat : '');
+  var gpsLng = old('gpsLng', customer && customer.gps ? customer.gps.lng : '');
+%>
+
+<%- include('../partials/page-header', {
+  heading: isEdit ? 'Edit customer' : 'Add customer',
+  subheading: isEdit
+    ? 'Update contact, location and utility details.'
+    : 'Create a customer profile. The customer code is generated automatically.',
+  actions: [{ label: 'Back to customers', url: '/customers', icon: 'bi-arrow-left', class: 'btn-outline-secondary' }]
+}) %>
+
+<div class="row g-3 g-lg-4 mt-1">
+  <div class="col-12 col-xl-8">
+    <div class="card app-card">
+      <div class="card-body p-4">
+        <%- include('../partials/form-errors') %>
+
+        <form method="POST" action="<%= formAction %>" novalidate>
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <% if (formMethod !== 'POST') { %>
+            <input type="hidden" name="_method" value="<%= formMethod %>">
+          <% } %>
+
+          <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Contact details</h2>
+
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <label for="name" class="form-label">Customer name <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="name" name="name"
+                     value="<%= old('name', customer ? customer.name : '') %>"
+                     maxlength="120" required autocomplete="name">
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label for="phone" class="form-label">Phone <span class="text-danger">*</span></label>
+              <input type="tel" class="form-control" id="phone" name="phone"
+                     value="<%= old('phone', customer ? customer.phone : '') %>"
+                     maxlength="20" required placeholder="03001234567" autocomplete="tel">
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label for="whatsapp" class="form-label">WhatsApp</label>
+              <input type="tel" class="form-control" id="whatsapp" name="whatsapp"
+                     value="<%= old('whatsapp', customer ? customer.whatsapp : '') %>"
+                     maxlength="20" placeholder="03001234567">
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label for="cnic" class="form-label">CNIC</label>
+              <input type="text" class="form-control" id="cnic" name="cnic"
+                     value="<%= old('cnic', customer ? customer.cnic : '') %>"
+                     maxlength="15" placeholder="12345-1234567-1" inputmode="numeric">
+            </div>
+          </div>
+
+          <hr class="my-4">
+
+          <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Location &amp; utility</h2>
+
+          <div class="row g-3">
+            <div class="col-12">
+              <label for="address" class="form-label">Address</label>
+              <textarea class="form-control" id="address" name="address" rows="2"
+                        maxlength="250" placeholder="House / street / block"><%= old('address', customer ? customer.address : '') %></textarea>
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label for="city" class="form-label">City</label>
+              <input type="text" class="form-control" id="city" name="city"
+                     value="<%= old('city', customer ? customer.city : '') %>" maxlength="80">
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label for="area" class="form-label">Area / locality</label>
+              <input type="text" class="form-control" id="area" name="area"
+                     value="<%= old('area', customer ? customer.area : '') %>" maxlength="80">
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label for="disco" class="form-label">DISCO</label>
+              <select class="form-select" id="disco" name="disco">
+                <option value="">Select DISCO</option>
+                <% crm.DISCO_COMPANIES.forEach(function (disco) { %>
+                  <option value="<%= disco %>"<%= initialDisco === disco ? ' selected' : '' %>><%= disco %></option>
+                <% }); %>
+              </select>
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label for="electricityReferenceNo" class="form-label">Electricity reference no.</label>
+              <input type="text" class="form-control" id="electricityReferenceNo" name="electricityReferenceNo"
+                     value="<%= old('electricityReferenceNo', customer ? customer.electricityReferenceNo : '') %>"
+                     maxlength="60" placeholder="Reference printed on the bill">
+            </div>
+
+            <div class="col-6 col-md-3">
+              <label for="gpsLat" class="form-label">GPS latitude</label>
+              <input type="number" step="any" class="form-control" id="gpsLat" name="gpsLat"
+                     value="<%= gpsLat === null ? '' : gpsLat %>" placeholder="31.5204">
+            </div>
+
+            <div class="col-6 col-md-3">
+              <label for="gpsLng" class="form-label">GPS longitude</label>
+              <input type="number" step="any" class="form-control" id="gpsLng" name="gpsLng"
+                     value="<%= gpsLng === null ? '' : gpsLng %>" placeholder="74.3587">
+            </div>
+          </div>
+
+          <hr class="my-4">
+
+          <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Classification</h2>
+
+          <div class="row g-3">
+            <div class="col-12 col-md-4">
+              <label for="type" class="form-label">Customer type <span class="text-danger">*</span></label>
+              <select class="form-select" id="type" name="type" required>
+                <% crm.CUSTOMER_TYPES.forEach(function (type) { %>
+                  <option value="<%= type %>"<%= initialType === type ? ' selected' : '' %>><%= crm.CUSTOMER_TYPE_LABELS[type] %></option>
+                <% }); %>
+              </select>
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label for="source" class="form-label">Source <span class="text-danger">*</span></label>
+              <select class="form-select" id="source" name="source" required>
+                <% crm.CUSTOMER_SOURCES.forEach(function (source) { %>
+                  <option value="<%= source %>"<%= initialSource === source ? ' selected' : '' %>><%= crm.CUSTOMER_SOURCE_LABELS[source] %></option>
+                <% }); %>
+              </select>
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label class="form-label d-block">Customer code</label>
+              <% if (isEdit) { %>
+                <div class="form-control-plaintext font-monospace"><%= customer.code %></div>
+              <% } else { %>
+                <div class="form-control-plaintext text-muted">Generated on save (CUS-0001)</div>
+              <% } %>
+            </div>
+
+            <div class="col-12">
+              <label for="notes" class="form-label">Notes</label>
+              <textarea class="form-control" id="notes" name="notes" rows="3" maxlength="1000"
+                        placeholder="Site conditions, preferences, important context…"><%= old('notes', customer ? customer.notes : '') %></textarea>
+            </div>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2 mt-4">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check2-circle me-1"></i><%= isEdit ? 'Save changes' : 'Create customer' %>
+            </button>
+            <a href="<%= isEdit ? '/customers/' + customer._id : '/customers' %>" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-4">
+    <div class="card app-card">
+      <div class="card-header bg-transparent">
+        <h2 class="h6 fw-semibold mb-0">Good to know</h2>
+      </div>
+      <div class="card-body small text-muted">
+        <p class="mb-2">
+          <i class="bi bi-hash me-1"></i>
+          Customer codes are sequential and unique. They are never reused, even after a soft delete.
+        </p>
+        <p class="mb-2">
+          <i class="bi bi-geo-alt me-1"></i>
+          Enter GPS coordinates together, or leave both blank.
+        </p>
+        <p class="mb-0">
+          <i class="bi bi-lightning-charge me-1"></i>
+          The electricity reference and DISCO help the survey team locate the connection.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>

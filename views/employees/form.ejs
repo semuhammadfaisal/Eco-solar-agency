@@ -1,0 +1,172 @@
+<%
+  var currentUserId = employee && employee.user ? (employee.user._id || employee.user) : '';
+  var initialUser = old('user', currentUserId || '');
+  var initialStatus = old('status', employee ? employee.status : 'active');
+  var joiningValue = old(
+    'joiningDate',
+    employee && employee.joiningDate ? employee.joiningDate.toISOString().slice(0, 10) : ''
+  );
+  var salaryValue = old(
+    'salary',
+    employee ? (employee.salaryPaisa / 100).toFixed(2) : ''
+  );
+  var commissionValue = old(
+    'commissionRate',
+    employee ? Number((employee.commissionRateBps / 100).toFixed(2)) : ''
+  );
+%>
+
+<%- include('../partials/page-header', {
+  heading: isEdit ? 'Edit employee' : 'Add employee',
+  subheading: isEdit
+    ? 'Update designation, salary, commission and status.'
+    : 'Link an existing staff account to an employee profile.',
+  actions: [{ label: 'Back to employees', url: '/employees', icon: 'bi-arrow-left', class: 'btn-outline-secondary' }]
+}) %>
+
+<div class="row g-3 g-lg-4 mt-1">
+  <div class="col-12 col-xl-8">
+    <div class="card app-card">
+      <div class="card-body p-4">
+        <%- include('../partials/form-errors') %>
+
+        <% if (!users.length) { %>
+          <div class="alert alert-warning small">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            No unlinked staff accounts are available.
+            <a href="/users/new" class="alert-link">Create a user account first</a>.
+          </div>
+        <% } %>
+
+        <form method="POST" action="<%= formAction %>" novalidate>
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <% if (formMethod !== 'POST') { %>
+            <input type="hidden" name="_method" value="<%= formMethod %>">
+          <% } %>
+
+          <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Employment details</h2>
+
+          <div class="row g-3">
+            <div class="col-12">
+              <label for="user" class="form-label">Linked staff account <span class="text-danger">*</span></label>
+              <select class="form-select" id="user" name="user" required>
+                <option value="">Select a user</option>
+                <% users.forEach(function (user) { %>
+                  <option value="<%= user._id %>"<%= String(initialUser) === String(user._id) ? ' selected' : '' %>>
+                    <%= user.name %> — <%= user.email %> (<%= user.role %>)
+                  </option>
+                <% }); %>
+              </select>
+              <div class="form-text">Each staff account can have exactly one employee profile.</div>
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label for="designation" class="form-label">Designation <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="designation" name="designation"
+                     value="<%= old('designation', employee ? employee.designation : '') %>"
+                     maxlength="100" required placeholder="Sales Executive, Site Surveyor…">
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label for="cnic" class="form-label">CNIC</label>
+              <input type="text" class="form-control" id="cnic" name="cnic"
+                     value="<%= old('cnic', employee ? employee.cnic : '') %>"
+                     maxlength="15" placeholder="12345-1234567-1" inputmode="numeric">
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label for="joiningDate" class="form-label">Joining date <span class="text-danger">*</span></label>
+              <input type="date" class="form-control" id="joiningDate" name="joiningDate"
+                     value="<%= joiningValue %>" required>
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label for="status" class="form-label">Status <span class="text-danger">*</span></label>
+              <select class="form-select" id="status" name="status" required>
+                <% crm.EMPLOYEE_STATUSES.forEach(function (status) { %>
+                  <option value="<%= status %>"<%= initialStatus === status ? ' selected' : '' %>><%= crm.EMPLOYEE_STATUS_LABELS[status] %></option>
+                <% }); %>
+              </select>
+            </div>
+          </div>
+
+          <hr class="my-4">
+
+          <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Compensation</h2>
+
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <label for="salary" class="form-label">Monthly salary (PKR) <span class="text-danger">*</span></label>
+              <div class="input-group">
+                <span class="input-group-text">PKR</span>
+                <input type="number" step="0.01" min="0" class="form-control" id="salary" name="salary"
+                       value="<%= salaryValue %>" required placeholder="50000.00">
+              </div>
+              <div class="form-text">Stored as integer paisa; enter rupees here.</div>
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label for="commissionRate" class="form-label">Commission rate (%)</label>
+              <div class="input-group">
+                <input type="number" step="0.01" min="0" max="100" class="form-control"
+                       id="commissionRate" name="commissionRate"
+                       value="<%= commissionValue %>" placeholder="2.50">
+                <span class="input-group-text">%</span>
+              </div>
+              <div class="form-text">For example 2.5 means 2.5% of a closed sale.</div>
+            </div>
+
+            <div class="col-12">
+              <label for="notes" class="form-label">Notes</label>
+              <textarea class="form-control" id="notes" name="notes" rows="3" maxlength="1000"
+                        placeholder="Contract terms, responsibilities, remarks…"><%= old('notes', employee ? employee.notes : '') %></textarea>
+            </div>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2 mt-4">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check2-circle me-1"></i><%= isEdit ? 'Save changes' : 'Create employee' %>
+            </button>
+            <a href="/employees" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-4">
+    <% if (isEdit && employee.user) { %>
+      <div class="card app-card mb-3">
+        <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">Linked account</h2></div>
+        <div class="card-body small">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <span class="avatar avatar-sm"><%= initials(employee.user.name) %></span>
+            <div>
+              <div class="fw-semibold"><%= employee.user.name %></div>
+              <div class="text-muted"><%= employee.user.email %></div>
+            </div>
+          </div>
+          <dl class="row mb-0">
+            <dt class="col-5 text-muted fw-normal">Role</dt>
+            <dd class="col-7"><%= employee.user.role %></dd>
+            <dt class="col-5 text-muted fw-normal">Phone</dt>
+            <dd class="col-7"><%= employee.user.phone || '—' %></dd>
+            <dt class="col-5 text-muted fw-normal">Profile created</dt>
+            <dd class="col-7"><%= formatDate(employee.createdAt) %></dd>
+            <dt class="col-5 text-muted fw-normal">Last updated</dt>
+            <dd class="col-7"><%= formatDate(employee.updatedAt) %></dd>
+          </dl>
+        </div>
+      </div>
+    <% } %>
+
+    <div class="card app-card">
+      <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">How this is used</h2></div>
+      <div class="card-body small text-muted">
+        <p class="mb-2"><i class="bi bi-person-check me-1"></i>Employee profiles are linked to sign-in accounts so attendance and commissions can be traced to a real user.</p>
+        <p class="mb-2"><i class="bi bi-cash-coin me-1"></i>Salary is private to owner and manager views.</p>
+        <p class="mb-0"><i class="bi bi-calendar-check me-1"></i>Daily attendance appears in the monthly summary with present, absent, leave, half-day and late counts.</p>
+      </div>
+    </div>
+  </div>
+</div>

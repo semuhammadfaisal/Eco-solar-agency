@@ -1,0 +1,268 @@
+<%- include('../partials/page-header', {
+  heading: 'Complaint Ticket ' + complaint.ticketNumber,
+  subheading: (complaint.customer ? complaint.customer.name : 'Customer') + ' · ' + (installationsConfig.COMPLAINT_TYPE_LABELS[complaint.issueType] || complaint.issueType),
+  actions: [
+    ...(can('complaints.manage') && complaint.status !== 'resolved' && complaint.status !== 'closed' ? [{ label: 'Resolve & Close Ticket', url: '#', icon: 'bi-check2-circle', class: 'btn-success', attrs: 'data-bs-toggle="modal" data-bs-target="#resolveModal"' }] : []),
+    { label: 'Back to tickets', url: '/complaints', icon: 'bi-arrow-left', class: 'btn-outline-secondary' }
+  ]
+}) %>
+
+<div class="row g-3 mt-1">
+
+  <!-- Left: Ticket Details & Resolution -->
+  <div class="col-12 col-lg-8">
+
+    <!-- Overview Card -->
+    <div class="card app-card mb-3">
+      <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0 fw-bold"><i class="bi bi-info-circle text-primary me-2"></i>Ticket Information & SLA</h5>
+        <div>
+          <span class="badge text-bg-<%= installationsConfig.COMPLAINT_PRIORITY_BADGES[complaint.priority] || 'secondary' %> me-1">
+            <%= complaint.priority.toUpperCase() %> PRIORITY
+          </span>
+          <span class="badge text-bg-<%= installationsConfig.COMPLAINT_STATUS_BADGES[complaint.status] || 'secondary' %>">
+            <%= installationsConfig.COMPLAINT_STATUS_LABELS[complaint.status] || complaint.status %>
+          </span>
+        </div>
+      </div>
+      <div class="card-body p-3">
+        <div class="row g-3 mb-3">
+          <div class="col-6 col-md-3">
+            <div class="small text-muted">Ticket Category</div>
+            <div class="fw-bold"><%= installationsConfig.COMPLAINT_TYPE_LABELS[complaint.issueType] || complaint.issueType %></div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="small text-muted">Warranty Coverage</div>
+            <div>
+              <% if (complaint.isUnderWarranty) { %>
+                <span class="badge text-bg-success">Covered under Warranty</span>
+              <% } else { %>
+                <span class="badge text-bg-warning">Paid Out-of-Warranty Service</span>
+              <% } %>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="small text-muted">SLA Target Resolution</div>
+            <div class="fw-bold"><%= formatDateTime(complaint.targetResolutionDate) %></div>
+            <div class="small">
+              <% if (complaint.isSlaBreached) { %>
+                <span class="text-danger fw-bold"><i class="bi bi-exclamation-triangle-fill me-1"></i>SLA Breached</span>
+              <% } else { %>
+                <span class="text-success"><%= complaint.slaHours %>h Target SLA</span>
+              <% } %>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="small text-muted">Assigned Technician</div>
+            <div class="fw-bold"><%= complaint.assignedTechnician ? complaint.assignedTechnician.name : 'Unassigned' %></div>
+            <div class="text-muted small"><%= complaint.assignedTechnician ? complaint.assignedTechnician.phone : '' %></div>
+          </div>
+        </div>
+
+        <div class="p-3 bg-light rounded">
+          <strong class="d-block small text-muted text-uppercase mb-1">Issue Description:</strong>
+          <p class="mb-0 small"><%= complaint.description %></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resolution & Parts Card -->
+    <% if (complaint.status === 'resolved' || complaint.status === 'closed') { %>
+      <div class="card app-card mb-3 border-success-subtle">
+        <div class="card-header bg-transparent py-3">
+          <h5 class="card-title mb-0 fw-bold text-success"><i class="bi bi-check-circle-fill me-2"></i>Resolution & Work Carried Out</h5>
+        </div>
+        <div class="card-body p-3">
+          <div class="mb-3">
+            <div class="small text-muted">Resolved At:</div>
+            <div class="fw-bold"><%= formatDateTime(complaint.resolvedAt) %></div>
+          </div>
+          <div class="mb-3">
+            <div class="small text-muted">Technician Notes:</div>
+            <p class="small mb-0"><%= complaint.resolutionNotes %></p>
+          </div>
+          <% if (complaint.serviceChargePaisa > 0) { %>
+            <div class="mb-3">
+              <div class="small text-muted">Service Fee Billed:</div>
+              <div class="fs-5 fw-bold text-dark"><%= formatPKR(complaint.serviceChargePaisa) %></div>
+            </div>
+          <% } %>
+
+          <% if (complaint.partsUsed && complaint.partsUsed.length) { %>
+            <h6 class="fw-bold small text-muted text-uppercase mt-3 mb-2">Replacement Parts Deducted from Stock:</h6>
+            <div class="table-responsive">
+              <table class="table table-sm table-bordered align-middle mb-0">
+                <thead class="table-light small">
+                  <tr>
+                    <th>Item</th>
+                    <th>Qty</th>
+                    <th>Serial #</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% complaint.partsUsed.forEach(function (part) { %>
+                    <tr class="small">
+                      <td><%= part.item ? part.item.name : 'Component' %></td>
+                      <td><%= part.qty %></td>
+                      <td><code><%= part.serialString || '—' %></code></td>
+                      <td><%= part.notes || '—' %></td>
+                    </tr>
+                  <% }); %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </div>
+      </div>
+    <% } %>
+
+  </div>
+
+  <!-- Right: Customer Info & Technician Assignment -->
+  <div class="col-12 col-lg-4">
+
+    <!-- Customer Card -->
+    <div class="card app-card mb-3">
+      <div class="card-header bg-transparent py-2">
+        <h6 class="card-title mb-0 fw-bold"><i class="bi bi-person text-primary me-2"></i>Customer Details</h6>
+      </div>
+      <div class="card-body p-3">
+        <% const cust = complaint.customer || {}; %>
+        <h6 class="fw-bold mb-1">
+          <a href="/customers/<%= cust._id %>" class="text-dark text-decoration-none"><%= cust.name %></a>
+        </h6>
+        <div class="small text-muted mb-2"><i class="bi bi-telephone me-1"></i><%= cust.phone %></div>
+        <div class="small text-muted mb-3"><i class="bi bi-geo-alt me-1"></i><%= [cust.address, cust.area, cust.city].filter(Boolean).join(', ') || 'N/A' %></div>
+
+        <% if (cust.phone) { %>
+          <a href="tel:<%= cust.phone %>" class="btn btn-outline-primary btn-sm w-100">
+            <i class="bi bi-telephone-fill me-1"></i>Call Customer
+          </a>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Actions Panel -->
+    <div class="card app-card mb-3">
+      <div class="card-header bg-transparent py-2">
+        <h6 class="card-title mb-0 fw-bold"><i class="bi bi-wrench text-primary me-2"></i>Ticket Actions</h6>
+      </div>
+      <div class="card-body p-3 d-grid gap-2">
+        <% if (can('complaints.manage') && complaint.status !== 'resolved' && complaint.status !== 'closed') { %>
+          <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#assignModal">
+            <i class="bi bi-person-check me-1"></i><%= complaint.assignedTechnician ? 'Reassign Technician' : 'Assign Technician' %>
+          </button>
+          <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#resolveModal">
+            <i class="bi bi-check2-circle me-1"></i>Resolve Ticket
+          </button>
+        <% } else { %>
+          <div class="text-muted small text-center">Ticket has been resolved.</div>
+        <% } %>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Modal: Assign Technician -->
+<div class="modal fade" id="assignModal" tabindex="-1" aria-labelledby="assignModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="/complaints/<%= complaint._id %>/assign">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+        <div class="modal-header">
+          <h5 class="modal-title" id="assignModalLabel"><i class="bi bi-person-check me-2"></i>Assign Technician</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Select Technician *</label>
+            <select class="form-select form-select-sm" name="technicianId" required>
+              <option value="">Choose technician...</option>
+              <% technicians.forEach(function (tech) { %>
+                <option value="<%= tech._id %>" <%= complaint.assignedTechnician && String(complaint.assignedTechnician._id || complaint.assignedTechnician) === String(tech._id) ? 'selected' : '' %>>
+                  <%= tech.name %> (<%= tech.role %> - <%= tech.phone || 'No phone' %>)
+                </option>
+              <% }); %>
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Scheduled Site Visit Date</label>
+            <input type="date" class="form-control form-control-sm" name="visitDate"
+                   value="<%= complaint.visitDate ? complaint.visitDate.toISOString().split('T')[0] : '' %>">
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light border btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm">Assign</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Resolve Ticket -->
+<div class="modal fade" id="resolveModal" tabindex="-1" aria-labelledby="resolveModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="POST" action="/complaints/<%= complaint._id %>/resolve">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+        <div class="modal-header">
+          <h5 class="modal-title" id="resolveModalLabel"><i class="bi bi-check2-circle text-success me-2"></i>Resolve Service Ticket</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Resolution Notes & Diagnosis *</label>
+            <textarea class="form-control form-control-sm" name="resolutionNotes" rows="3" required
+                      placeholder="Describe the technical fix, firmware reload, MC4 crimp repair, or parts replaced..."></textarea>
+          </div>
+
+          <div class="p-3 bg-light rounded mb-3">
+            <strong class="d-block small text-muted text-uppercase mb-2">Replacement Parts Used (Deducted from Warehouse):</strong>
+            <div class="row g-2 mb-2">
+              <div class="col-12 col-md-6">
+                <label class="form-label small">Inventory Item</label>
+                <select class="form-select form-select-sm" name="itemId">
+                  <option value="">No parts replaced</option>
+                  <% availableItems.forEach(function (it) { %>
+                    <option value="<%= it._id %>"><%= it.name %> (<%= it.sku %>) - Stock: <%= it.currentStock %> <%= it.unit %></option>
+                  <% }); %>
+                </select>
+              </div>
+              <div class="col-6 col-md-2">
+                <label class="form-label small">Qty</label>
+                <input type="number" min="1" class="form-control form-control-sm" name="partQty" value="1">
+              </div>
+              <div class="col-6 col-md-4">
+                <label class="form-label small">Serial # (if serialised)</label>
+                <input type="text" class="form-control form-control-sm" name="partSerial" placeholder="Serial barcode">
+              </div>
+            </div>
+          </div>
+
+          <% if (!complaint.isUnderWarranty) { %>
+            <div class="mb-3">
+              <label class="form-label small fw-semibold">Service Charge / Labor Billed (PKR)</label>
+              <input type="number" step="1" min="0" class="form-control form-control-sm" name="serviceCharge"
+                     value="<%= complaint.serviceChargePaisa ? (complaint.serviceChargePaisa / 100) : '' %>" placeholder="e.g. 5000">
+            </div>
+          <% } %>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light border btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-success btn-sm">Mark Resolved</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

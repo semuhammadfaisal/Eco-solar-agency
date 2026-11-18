@@ -1,0 +1,139 @@
+<%- include('../partials/page-header', {
+  heading: 'Saved Systems & BOMs',
+  subheading: 'Configured solar systems with complete bill of materials, pricing, and approval workflows.',
+  actions: [
+    { label: 'New system build', url: '/system-builder', icon: 'bi-plus-lg', class: 'btn-primary' }
+  ]
+}) %>
+
+<div class="card app-card mt-3">
+  <div class="card-body p-3 p-md-4">
+    <form method="GET" action="/system-configs" class="row g-2 mb-3">
+      <div class="col-12 col-md-5">
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" class="form-control" name="search" placeholder="Search by name, number…" value="<%= filters.search %>">
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <select class="form-select" name="systemType" onchange="this.form.submit()">
+          <option value="">All system types</option>
+          <% systems.SYSTEM_TYPES.forEach(function (type) { %>
+            <option value="<%= type %>"<%= filters.systemType === type ? ' selected' : '' %>><%= systems.SYSTEM_TYPE_LABELS[type] %></option>
+          <% }); %>
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <select class="form-select" name="approvalStatus" onchange="this.form.submit()">
+          <option value="">All approval states</option>
+          <% systems.APPROVAL_STATUSES.forEach(function (st) { %>
+            <option value="<%= st %>"<%= filters.approvalStatus === st ? ' selected' : '' %>><%= systems.APPROVAL_STATUS_LABELS[st] %></option>
+          <% }); %>
+        </select>
+      </div>
+      <div class="col-12 col-md-2 d-flex gap-2">
+        <button type="submit" class="btn btn-outline-secondary w-100">Filter</button>
+        <% if (filters.search || filters.systemType || filters.approvalStatus) { %>
+          <a href="/system-configs" class="btn btn-outline-danger" title="Clear filters"><i class="bi bi-x-lg"></i></a>
+        <% } %>
+      </div>
+    </form>
+
+    <% if (!configs || !configs.length) { %>
+      <div class="text-center py-5 text-muted">
+        <i class="bi bi-cpu fs-1 d-block mb-2"></i>
+        <p class="mb-2">No saved system configurations found.</p>
+        <a href="/system-builder" class="btn btn-sm btn-primary">Open System Builder to design your first system</a>
+      </div>
+    <% } else { %>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle app-table mb-0">
+          <thead>
+            <tr>
+              <th>System #</th>
+              <th>System Title</th>
+              <th>Customer / Link</th>
+              <th>Type</th>
+              <th>Capacity</th>
+              <th class="text-end">Final Price</th>
+              <% if (can('profit.view')) { %>
+                <th class="text-end">Margin</th>
+              <% } %>
+              <th>Approval</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% configs.forEach(function (cfg) { %>
+              <tr>
+                <td>
+                  <a href="/system-configs/<%= cfg._id %>" class="font-monospace fw-semibold"><%= cfg.number %></a>
+                </td>
+                <td>
+                  <a href="/system-configs/<%= cfg._id %>" class="fw-medium text-body"><%= cfg.name %></a>
+                  <div class="text-muted small">
+                    <%= cfg.lines ? cfg.lines.length : 0 %> <%= (cfg.lines && cfg.lines.length === 1) ? 'item' : 'items' %> · <%= formatDate(cfg.createdAt) %>
+                  </div>
+                </td>
+                <td>
+                  <% if (cfg.customer) { %>
+                    <a href="/customers/<%= cfg.customer._id %>" class="fw-medium text-body"><%= cfg.customer.name %></a>
+                    <div class="text-muted small"><%= cfg.customer.phone || cfg.customer.city || '' %></div>
+                  <% } else if (cfg.survey) { %>
+                    <a href="/surveys/<%= cfg.survey._id %>" class="small font-monospace"><%= cfg.survey.number %></a>
+                  <% } else { %>
+                    <span class="text-muted small">Standalone</span>
+                  <% } %>
+                </td>
+                <td>
+                  <span class="badge text-bg-<%= systems.SYSTEM_TYPE_BADGES[cfg.systemType] || 'secondary' %>">
+                    <%= systems.SYSTEM_TYPE_LABELS[cfg.systemType] || cfg.systemType %>
+                  </span>
+                </td>
+                <td>
+                  <div class="fw-bold text-success"><%= formatQty(cfg.capacityKw) %> kW</div>
+                  <div class="text-muted small"><%= cfg.panelCount %> panels</div>
+                </td>
+                <td class="text-end fw-bold text-primary">
+                  <%= formatPKR(cfg.finalPricePaisa) %>
+                </td>
+                <% if (can('profit.view')) { %>
+                  <td class="text-end small">
+                    <% if (cfg.netProfitPaisa !== undefined) { %>
+                      <div class="<%= cfg.netProfitPaisa < 0 ? 'text-danger' : 'text-success' %> fw-medium">
+                        <%= formatPKR(cfg.netProfitPaisa) %>
+                      </div>
+                      <div class="text-muted"><%= cfg.netProfitMarginPercent %>%</div>
+                    <% } else { %>
+                      —
+                    <% } %>
+                  </td>
+                <% } %>
+                <td>
+                  <span class="badge text-bg-<%= systems.APPROVAL_STATUS_BADGES[cfg.approvalStatus] || 'secondary' %>">
+                    <%= systems.APPROVAL_STATUS_LABELS[cfg.approvalStatus] || cfg.approvalStatus %>
+                  </span>
+                </td>
+                <td class="text-end">
+                  <div class="btn-group btn-group-sm">
+                    <a href="/system-configs/<%= cfg._id %>" class="btn btn-outline-primary" title="View BOM and Details">
+                      <i class="bi bi-file-earmark-spreadsheet me-1"></i>BOM
+                    </a>
+                    <a href="/system-configs/<%= cfg._id %>/print" target="_blank" class="btn btn-outline-secondary" title="Print BOM">
+                      <i class="bi bi-printer"></i>
+                    </a>
+                    <a href="/system-builder?config=<%= cfg._id %>" class="btn btn-outline-secondary" title="Edit in builder">
+                      <i class="bi bi-pencil"></i>
+                    </a>
+                  </div>
+                </td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+
+      <%- include('../partials/pagination', { pagination: pagination }) %>
+    <% } %>
+  </div>
+</div>

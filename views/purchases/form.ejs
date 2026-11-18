@@ -1,0 +1,231 @@
+<%
+  var submitted = oldInput && Array.isArray(oldInput.items) ? oldInput.items : null;
+  var lines = [];
+  if (submitted && submitted.length) {
+    lines = submitted.map(function (raw) {
+      return {
+        item: raw && raw.item ? String(raw.item) : '',
+        qty: raw && raw.qty !== undefined ? raw.qty : '',
+        unitCost: raw && raw.unitCost !== undefined ? raw.unitCost : ''
+      };
+    });
+  } else if (purchase && purchase.items && purchase.items.length) {
+    lines = purchase.items.map(function (line) {
+      return {
+        item: String(line.item && line.item._id ? line.item._id : line.item),
+        qty: line.qty,
+        unitCost: (Number(line.unitCostPaisa || 0) / 100)
+      };
+    });
+  } else {
+    lines = [{ item: '', qty: '', unitCost: '' }];
+  }
+
+  var supplierValue = old('supplier', purchase ? String(purchase.supplier && purchase.supplier._id ? purchase.supplier._id : purchase.supplier) : '');
+  var invoiceValue = old('invoiceNo', purchase ? purchase.invoiceNo : '');
+  var paidValue = old('paidAmount', purchase && purchase.paidPaisa ? (purchase.paidPaisa / 100) : '');
+  var notesValue = old('notes', purchase ? purchase.notes : '');
+  var dateValue = oldInput.purchaseDate
+    || (purchase ? new Date(purchase.purchaseDate).toISOString().slice(0, 10) : today);
+%>
+
+<%- include('../partials/page-header', {
+  heading: isEdit ? 'Edit purchase order' : 'New purchase order',
+  subheading: 'Stock only enters the ledger when this order is received through a GRN.',
+  actions: [
+    { label: 'Back to purchases', url: '/purchases', icon: 'bi-arrow-left', class: 'btn-outline-secondary' }
+  ]
+}) %>
+
+<div class="row g-3 g-lg-4 mt-1">
+  <div class="col-12 col-xl-9">
+    <div class="card app-card">
+      <div class="card-body p-4">
+        <%- include('../partials/form-errors') %>
+
+        <form method="POST" action="<%= formAction %>" id="purchaseForm" data-purchase-form data-once novalidate>
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <% if (isEdit) { %><input type="hidden" name="_method" value="PUT"><% } %>
+
+          <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Order details</h2>
+          <div class="row g-3">
+            <div class="col-12 col-md-5">
+              <label for="supplier" class="form-label">Supplier <span class="text-danger">*</span></label>
+              <select class="form-select" id="supplier" name="supplier" required>
+                <option value="">Select a supplier…</option>
+                <% suppliers.forEach(function (supplier) { %>
+                  <option value="<%= supplier._id %>"<%= String(supplierValue) === String(supplier._id) ? ' selected' : '' %>>
+                    <%= supplier.name %><%= supplier.company ? ' — ' + supplier.company : '' %>
+                  </option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="col-6 col-md-3">
+              <label for="purchaseDate" class="form-label">Purchase date</label>
+              <input type="date" class="form-control" id="purchaseDate" name="purchaseDate" value="<%= dateValue %>">
+            </div>
+            <div class="col-6 col-md-4">
+              <label for="invoiceNo" class="form-label">Supplier invoice no.</label>
+              <input type="text" class="form-control" id="invoiceNo" name="invoiceNo"
+                     value="<%= invoiceValue %>" maxlength="60" placeholder="Optional at PO stage">
+            </div>
+          </div>
+
+          <hr class="my-4">
+
+          <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-2">
+            <h2 class="h6 fw-semibold text-uppercase text-muted mb-0">Purchase lines</h2>
+            <button type="button" class="btn btn-sm btn-outline-primary" data-add-line>
+              <i class="bi bi-plus-lg me-1"></i>Add line
+            </button>
+          </div>
+
+          <div class="table-responsive border rounded">
+            <table class="table align-middle app-table mb-0" id="purchaseLines">
+              <thead>
+                <tr>
+                  <th style="min-width:240px">Item</th>
+                  <th style="width:120px" class="text-end">Quantity</th>
+                  <th style="width:150px" class="text-end">Unit cost (PKR)</th>
+                  <th style="width:130px" class="text-end">Line total</th>
+                  <th style="width:48px"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <% lines.forEach(function (line, index) { %>
+                  <tr data-line>
+                    <td>
+                      <select class="form-select form-select-sm" name="items[<%= index %>][item]" data-line-item>
+                        <option value="">Select item…</option>
+                        <% items.forEach(function (item) { %>
+                          <option value="<%= item._id %>"
+                                  data-cost="<%= item.avgCostPaisa ? (item.avgCostPaisa / 100) : (item.purchasePricePaisa ? (item.purchasePricePaisa / 100) : '') %>"
+                                  data-unit="<%= item.unit %>"
+                                  data-serial="<%= item.hasSerial ? '1' : '0' %>"
+                                  <%= String(line.item) === String(item._id) ? 'selected' : '' %>>
+                            <%= item.sku %> — <%= item.name %><%= item.hasSerial ? ' (serial)' : '' %>
+                          </option>
+                        <% }); %>
+                      </select>
+                      <div class="form-text d-none" data-line-hint></div>
+                    </td>
+                    <td>
+                      <input type="number" class="form-control form-control-sm text-end" name="items[<%= index %>][qty]"
+                             value="<%= line.qty %>" min="0.0001" step="any" inputmode="decimal" data-line-qty
+                             placeholder="0">
+                    </td>
+                    <td>
+                      <input type="text" class="form-control form-control-sm text-end" name="items[<%= index %>][unitCost]"
+                             value="<%= line.unitCost %>" inputmode="decimal" data-line-cost placeholder="0.00">
+                    </td>
+                    <td class="text-end small fw-semibold" data-line-total>0</td>
+                    <td class="text-end">
+                      <button type="button" class="btn btn-sm btn-outline-danger" data-remove-line title="Remove line">
+                        <i class="bi bi-x-lg"></i>
+                      </button>
+                    </td>
+                  </tr>
+                <% }); %>
+              </tbody>
+              <tfoot>
+                <tr>
+                  <th colspan="3" class="text-end text-uppercase small text-muted">Order total</th>
+                  <th class="text-end" data-order-total>0</th>
+                  <th></th>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <div class="form-text mt-2">
+            Pick an item to fill its default cost. Serial-tracked items accept whole units only.
+          </div>
+
+          <hr class="my-4">
+
+          <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Payment</h2>
+          <div class="row g-3">
+            <div class="col-12 col-md-4">
+              <label for="paidAmount" class="form-label">Amount paid now (PKR)</label>
+              <input type="text" class="form-control" id="paidAmount" name="paidAmount"
+                     value="<%= paidValue %>" inputmode="decimal" placeholder="0.00">
+              <div class="form-text">Leave blank for unpaid. You can record more later.</div>
+            </div>
+            <div class="col-12 col-md-8">
+              <label class="form-label d-block">Summary</label>
+              <div class="border rounded bg-light-subtle px-3 py-2 small">
+                <div class="d-flex justify-content-between"><span class="text-muted">Order total</span><span data-summary-total>0</span></div>
+                <div class="d-flex justify-content-between"><span class="text-muted">Paid now</span><span data-summary-paid>0</span></div>
+                <div class="d-flex justify-content-between fw-semibold"><span>Outstanding</span><span data-summary-outstanding>0</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-4">
+            <label for="notes" class="form-label">Notes</label>
+            <textarea class="form-control" id="notes" name="notes" rows="3" maxlength="1000"
+                      placeholder="Delivery instructions, agreed rates…"><%= notesValue %></textarea>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2 justify-content-end mt-4">
+            <a href="<%= purchase ? '/purchases/' + purchase._id : '/purchases' %>" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check2-circle me-1"></i><%= isEdit ? 'Save purchase order' : 'Create purchase order' %>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-3">
+    <div class="card app-card bg-light-subtle">
+      <div class="card-header bg-transparent"><h2 class="h6 fw-semibold mb-0">After saving</h2></div>
+      <div class="card-body small text-muted">
+        <ol class="ps-3 mb-3">
+          <li class="mb-2">The PO is created as <strong>ordered</strong>; stock does not move.</li>
+          <li class="mb-2">When goods arrive, open the PO and choose <strong>Receive stock</strong>.</li>
+          <li class="mb-2">The GRN adds stock, updates the moving-average cost and captures serials.</li>
+          <li class="mb-0">Partial deliveries are allowed; the PO stays open until every line is received.</li>
+        </ol>
+        <div class="alert alert-light border small mb-0 py-2">
+          <i class="bi bi-lock me-1"></i>Only the owner, accountant and storekeeper can see purchase prices.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<template id="purchaseLineTemplate">
+  <tr data-line>
+    <td>
+      <select class="form-select form-select-sm" name="items[__INDEX__][item]" data-line-item>
+        <option value="">Select item…</option>
+        <% items.forEach(function (item) { %>
+          <option value="<%= item._id %>"
+                  data-cost="<%= item.avgCostPaisa ? (item.avgCostPaisa / 100) : (item.purchasePricePaisa ? (item.purchasePricePaisa / 100) : '') %>"
+                  data-unit="<%= item.unit %>"
+                  data-serial="<%= item.hasSerial ? '1' : '0' %>">
+            <%= item.sku %> — <%= item.name %><%= item.hasSerial ? ' (serial)' : '' %>
+          </option>
+        <% }); %>
+      </select>
+      <div class="form-text d-none" data-line-hint></div>
+    </td>
+    <td>
+      <input type="number" class="form-control form-control-sm text-end" name="items[__INDEX__][qty]"
+             value="" min="0.0001" step="any" inputmode="decimal" data-line-qty placeholder="0">
+    </td>
+    <td>
+      <input type="text" class="form-control form-control-sm text-end" name="items[__INDEX__][unitCost]"
+             value="" inputmode="decimal" data-line-cost placeholder="0.00">
+    </td>
+    <td class="text-end small fw-semibold" data-line-total>0</td>
+    <td class="text-end">
+      <button type="button" class="btn btn-sm btn-outline-danger" data-remove-line title="Remove line">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </td>
+  </tr>
+</template>
+
+<script src="/js/inventory.js"></script>

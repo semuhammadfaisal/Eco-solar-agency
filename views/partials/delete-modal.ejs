@@ -1,0 +1,34 @@
+<!--
+  Shared delete confirmation modal.
+  Any button with data-delete-url="/path" data-delete-name="Record name"
+  opens this modal and submits a soft DELETE request to that URL.
+-->
+<div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-labelledby="confirmDeleteLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title h5" id="confirmDeleteLabel">Delete record</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">
+          You are about to delete <strong data-delete-target>this record</strong>.
+        </p>
+        <p class="text-muted small mb-0">
+          This is a soft delete: the record is hidden from the application but kept in the
+          database for audit purposes.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <form method="POST" id="confirmDeleteForm" class="d-inline">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input type="hidden" name="_method" value="DELETE">
+          <button type="submit" class="btn btn-danger">
+            <i class="bi bi-trash me-1"></i>Delete
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
