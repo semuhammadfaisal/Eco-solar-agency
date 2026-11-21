@@ -43,6 +43,7 @@ test('buildQuotationPdf returns a valid PDF buffer with header, items, and comme
         qty: 18,
         unitSellingPricePaisa: 1800000,
         totalSellingPricePaisa: 32400000,
+        notes: 'Tier-1 bifacial modules with 25-year performance warranty',
         isOptionalExtra: false,
       },
       {

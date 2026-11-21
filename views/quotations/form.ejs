@@ -1,3 +1,20 @@
+<%
+  var initialCustomer = {
+    mode: old('customerMode', 'existing'),
+    id: old('customer', initialQuote.customer ? String(initialQuote.customer) : ''),
+    newCustomer: {
+      name: old('name', ''),
+      phone: old('phone', ''),
+      whatsapp: old('whatsapp', ''),
+      cnic: old('cnic', ''),
+      address: old('address', ''),
+      city: old('city', ''),
+      type: old('customerType', 'residential'),
+      source: old('customerSource', 'walk_in')
+    }
+  };
+%>
+
 <%- include('../partials/page-header', {
   heading: isEdit ? 'Edit Quotation' : 'Create Quotation',
   subheading: 'Draft a professional solar system proposal with itemized equipment, optional extras, and milestone terms.',
@@ -12,9 +29,12 @@
        <%= JSON.stringify(inventoryItems) %>,
        <%= JSON.stringify(canViewCosts) %>,
        <%= JSON.stringify(canViewProfit) %>,
-       <%= JSON.stringify(isOwner) %>
+       <%= JSON.stringify(isOwner) %>,
+       <%= JSON.stringify(initialCustomer) %>
      )"
      x-init="init()">
+
+  <style>[x-cloak] { display: none !important; }</style>
 
   <!-- Below Cost / Low Margin Alerts (Visible to Owner & Accountant) -->
   <template x-if="canViewProfit && warnings.length > 0">
@@ -32,6 +52,8 @@
   </template>
 
   <form method="POST" action="/quotations" @submit="handleSubmit($event)" novalidate>
+    <%- include('../partials/form-errors') %>
+
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
     <input type="hidden" name="systemConfig" :value="systemConfig">
     <input type="hidden" name="survey" :value="survey">
@@ -46,26 +68,86 @@
 
     <!-- Top Card: Proposal Identification & Relations -->
     <div class="card app-card mb-3">
-      <div class="card-header bg-transparent py-3">
+      <div class="card-header bg-transparent py-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
         <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
           <i class="bi bi-file-earmark-person"></i> Proposal &amp; Customer Information
         </h3>
+        <div class="btn-group" role="group" aria-label="Customer mode">
+          <input type="radio" class="btn-check" name="customerMode" id="modeExisting" value="existing" x-model="customerMode">
+          <label class="btn btn-outline-primary btn-sm" for="modeExisting">Existing customer</label>
+          <input type="radio" class="btn-check" name="customerMode" id="modeNew" value="new" x-model="customerMode">
+          <label class="btn btn-outline-primary btn-sm" for="modeNew">New customer</label>
+        </div>
       </div>
       <div class="card-body p-3 p-md-4">
-        <div class="row g-3">
-          <!-- Customer Selection -->
-          <div class="col-12 col-md-5">
-            <label class="form-label small fw-semibold text-uppercase text-muted">Customer <span class="text-danger">*</span></label>
-            <select class="form-select form-select-lg" name="customer" x-model="customer" required>
-              <option value="">Select Customer…</option>
-              <% customers.forEach(function (c) { %>
-                <option value="<%= c._id %>" <%= (initialQuote.customer && String(initialQuote.customer) === String(c._id)) ? 'selected' : '' %>>
-                  <%= c.name %> (<%= c.code %>)<%= c.phone ? ' · ' + c.phone : '' %>
-                </option>
-              <% }); %>
-            </select>
-          </div>
+        <!-- Existing customer -->
+        <div x-show="customerMode === 'existing'" x-cloak class="mb-3">
+          <label for="customer" class="form-label small fw-semibold text-uppercase text-muted">Select customer <span class="text-danger">*</span></label>
+          <select class="form-select form-select-lg" id="customer" name="customer" x-model="customer" :required="customerMode === 'existing'">
+            <option value="">Select Customer…</option>
+            <% customers.forEach(function (c) { %>
+              <option value="<%= c._id %>"><%= c.name %> (<%= c.code %>)<%= c.phone ? ' · ' + c.phone : '' %></option>
+            <% }); %>
+          </select>
+          <div class="form-text">Not listed yet? Switch to “New customer”.</div>
+        </div>
 
+        <!-- New customer -->
+        <div x-show="customerMode === 'new'" x-cloak class="mb-3">
+          <div class="alert alert-info py-2 px-3 small d-flex align-items-center gap-2 mb-3">
+            <i class="bi bi-person-plus-fill fs-5"></i>
+            <span>A customer profile will be created automatically and linked to this quotation.</span>
+          </div>
+          <div class="row g-3">
+            <div class="col-12 col-md-4">
+              <label for="newCustomerName" class="form-label small fw-semibold text-uppercase text-muted">Customer name <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="newCustomerName" name="name" x-model="newCustomerName"
+                     maxlength="120" autocomplete="name" :required="customerMode === 'new'">
+            </div>
+            <div class="col-12 col-md-4">
+              <label for="newCustomerPhone" class="form-label small fw-semibold text-uppercase text-muted">Phone <span class="text-danger">*</span></label>
+              <input type="tel" class="form-control" id="newCustomerPhone" name="phone" x-model="newCustomerPhone"
+                     maxlength="20" placeholder="03001234567" autocomplete="tel" :required="customerMode === 'new'">
+            </div>
+            <div class="col-12 col-md-4">
+              <label for="newCustomerWhatsapp" class="form-label small fw-semibold text-uppercase text-muted">WhatsApp</label>
+              <input type="tel" class="form-control" id="newCustomerWhatsapp" name="whatsapp" x-model="newCustomerWhatsapp"
+                     maxlength="20" placeholder="03001234567">
+            </div>
+            <div class="col-12 col-md-3">
+              <label for="newCustomerCnic" class="form-label small fw-semibold text-uppercase text-muted">CNIC</label>
+              <input type="text" class="form-control" id="newCustomerCnic" name="cnic" x-model="newCustomerCnic"
+                     maxlength="15" placeholder="12345-1234567-1" inputmode="numeric">
+            </div>
+            <div class="col-12 col-md-3">
+              <label for="newCustomerCity" class="form-label small fw-semibold text-uppercase text-muted">City</label>
+              <input type="text" class="form-control" id="newCustomerCity" name="city" x-model="newCustomerCity" maxlength="80">
+            </div>
+            <div class="col-12 col-md-3">
+              <label for="newCustomerType" class="form-label small fw-semibold text-uppercase text-muted">Customer type</label>
+              <select class="form-select" id="newCustomerType" name="customerType" x-model="newCustomerType">
+                <% crm.CUSTOMER_TYPES.forEach(function (type) { %>
+                  <option value="<%= type %>"><%= crm.CUSTOMER_TYPE_LABELS[type] %></option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="col-12 col-md-3">
+              <label for="newCustomerSource" class="form-label small fw-semibold text-uppercase text-muted">Lead source</label>
+              <select class="form-select" id="newCustomerSource" name="customerSource" x-model="newCustomerSource">
+                <% crm.CUSTOMER_SOURCES.forEach(function (source) { %>
+                  <option value="<%= source %>"><%= crm.CUSTOMER_SOURCE_LABELS[source] %></option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="col-12">
+              <label for="newCustomerAddress" class="form-label small fw-semibold text-uppercase text-muted">Address</label>
+              <textarea class="form-control" id="newCustomerAddress" name="address" x-model="newCustomerAddress" rows="2"
+                        maxlength="250" placeholder="House / street / block"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-3">
           <!-- System Type -->
           <div class="col-6 col-md-3">
             <label class="form-label small fw-semibold text-uppercase text-muted">System Type <span class="text-danger">*</span></label>
@@ -156,35 +238,77 @@
           <h3 class="h6 fw-bold mb-0 text-primary d-flex align-items-center gap-2">
             <i class="bi bi-box-seam"></i> System Items &amp; Optional Extras
           </h3>
-          <p class="text-muted small mb-0">Components included in the snapshot bill of materials. Check "Optional Extra" for items offered as optional add-ons.</p>
+          <p class="text-muted small mb-0">Item name stays separate from its description. Add inventory items or custom rows in seconds.</p>
         </div>
-        <button type="button" class="btn btn-sm btn-outline-primary" @click="addCustomLine()">
-          <i class="bi bi-plus-lg me-1"></i>Add Custom Item
-        </button>
+        <div class="d-flex flex-wrap gap-2">
+          <button type="button" class="btn btn-sm btn-outline-secondary" @click="duplicateLastItem()" :disabled="!items.length">
+            <i class="bi bi-files me-1"></i>Duplicate Last
+          </button>
+          <button type="button" class="btn btn-sm btn-outline-danger" @click="clearItems()" :disabled="!items.length">
+            <i class="bi bi-eraser me-1"></i>Clear All
+          </button>
+          <button type="button" class="btn btn-sm btn-outline-primary" @click="addCustomLine()">
+            <i class="bi bi-plus-lg me-1"></i>Add Blank Row
+          </button>
+        </div>
       </div>
 
-      <!-- Quick Inventory Picker Bar -->
+      <!-- Quick Add Bar -->
       <div class="card-body bg-light border-bottom p-3">
-        <div class="row g-2 align-items-center">
-          <div class="col-12 col-md-7">
-            <select class="form-select" x-model="pickedItemId">
-              <option value="">-- Quick select component from inventory --</option>
-              <template x-for="inv in inventoryItems" :key="inv._id">
-                <option :value="inv._id"
-                        x-text="`${inv.sku} · ${inv.name} (${inv.category || 'other'}${inv.brand ? ' - ' + inv.brand : ''}) · PKR ${(inv.sellingPricePaisa/100).toLocaleString('en-PK')}`">
-                </option>
-              </template>
-            </select>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+          <div class="small text-muted">
+            <i class="bi bi-lightning-charge me-1"></i>
+            Type to search inventory, set qty / rate / description, then press Add.
           </div>
-          <div class="col-4 col-md-2">
-            <div class="input-group">
-              <span class="input-group-text small">Qty</span>
-              <input type="number" class="form-control" min="1" step="1" x-model.number="pickedQty">
+          <div class="small text-muted d-none d-md-block">Repeat to build a multi-item quotation.</div>
+        </div>
+        <div class="row g-2 align-items-end">
+          <div class="col-12 col-lg-4">
+            <label for="quickItem" class="form-label small fw-semibold text-uppercase text-muted mb-1">Item <span class="text-danger">*</span></label>
+            <div class="position-relative">
+              <input type="text" class="form-control" id="quickItem"
+                     x-model="itemSearch" @input="onItemSearchInput()" @focus="itemPickerOpen = true; filterInventory()"
+                     @keydown.enter.prevent="pickFirstInventoryItem()" @keydown.escape="itemPickerOpen = false"
+                     maxlength="160" autocomplete="off" placeholder="Search SKU / name / brand, or type a custom item">
+              <div class="list-group position-absolute w-100 shadow-sm bg-white"
+                   style="z-index: 1050; max-height: 240px; overflow-y: auto;"
+                   x-show="itemPickerOpen && filteredInventory.length > 0" x-cloak>
+                <template x-for="inv in filteredInventory" :key="inv._id">
+                  <button type="button" class="list-group-item list-group-item-action py-2 small"
+                          @mousedown.prevent="selectPickedItem(inv)">
+                    <div class="d-flex justify-content-between gap-2">
+                      <span class="fw-semibold text-body" x-text="inv.name"></span>
+                      <span class="text-primary fw-bold text-nowrap" x-text="formatMoney((Number(inv.sellingPricePaisa) || 0) / 100)"></span>
+                    </div>
+                    <div class="text-muted" x-text="[inv.sku, inv.category, inv.brand].filter(Boolean).join(' · ')"></div>
+                  </button>
+                </template>
+              </div>
+            </div>
+            <div class="form-text small mt-1 text-success" x-show="pickedItemId" x-cloak>
+              <i class="bi bi-check-circle me-1"></i>Inventory item selected — rate loaded from stock.
+            </div>
+            <div class="form-text small mt-1" x-show="itemPickerOpen && itemSearch && filteredInventory.length === 0 && !pickedItemId" x-cloak>
+              No inventory match — Add will create a custom item.
             </div>
           </div>
-          <div class="col-8 col-md-3">
-            <button type="button" class="btn btn-primary w-100" @click="addInventoryItem()" :disabled="!pickedItemId">
-              <i class="bi bi-plus-circle me-1"></i>Add to Proposal
+          <div class="col-4 col-lg-1">
+            <label for="quickQty" class="form-label small fw-semibold text-uppercase text-muted mb-1">Qty</label>
+            <input type="number" class="form-control" id="quickQty" min="0.01" step="any" x-model.number="pickedQty">
+          </div>
+          <div class="col-8 col-lg-2">
+            <label for="quickRate" class="form-label small fw-semibold text-uppercase text-muted mb-1">Rate (PKR)</label>
+            <input type="number" class="form-control" id="quickRate" min="0" step="any" x-model.number="pickedPrice" placeholder="0">
+          </div>
+          <div class="col-12 col-lg-3">
+            <label for="quickDescription" class="form-label small fw-semibold text-uppercase text-muted mb-1">Description</label>
+            <input type="text" class="form-control" id="quickDescription" x-ref="quickDescription"
+                   x-model="pickedDescription" maxlength="300"
+                   placeholder="e.g. Tier-1 bifacial, 25-year warranty">
+          </div>
+          <div class="col-12 col-lg-2">
+            <button type="button" class="btn btn-primary w-100" @click="addInventoryItem()" :disabled="!canQuickAdd">
+              <i class="bi bi-plus-circle me-1"></i>Add Item
             </button>
           </div>
         </div>
@@ -196,15 +320,16 @@
           <thead class="table-light">
             <tr>
               <th style="width: 40px;">#</th>
-              <th>Item / Description</th>
-              <th style="width: 110px;">Qty</th>
-              <th style="width: 140px;">Unit Price (PKR)</th>
+              <th style="min-width: 210px;">Item</th>
+              <th style="min-width: 230px;">Description</th>
+              <th style="width: 100px;">Qty</th>
+              <th style="width: 135px;">Unit Price (PKR)</th>
               <template x-if="canViewCosts">
                 <th style="width: 130px;">Unit Cost (PKR)</th>
               </template>
               <th style="width: 140px;" class="text-end">Total Price</th>
               <th style="width: 110px;" class="text-center">Optional?</th>
-              <th style="width: 45px;"></th>
+              <th style="width: 80px;" class="text-center">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -212,22 +337,17 @@
               <tr :class="line.isOptionalExtra ? 'table-info-subtle' : ''">
                 <td class="text-muted small" x-text="idx + 1"></td>
                 <td>
-                  <input type="text" class="form-control form-control-sm fw-medium mb-1"
-                         x-model="line.itemSnapshot.name" placeholder="Item name &amp; specification">
-                  <div class="row g-1">
-                    <div class="col-6">
-                      <input type="text" class="form-control form-control-sm text-muted small"
-                             x-model="line.itemSnapshot.brand" placeholder="Brand / Model">
-                    </div>
-                    <div class="col-6">
-                      <input type="text" class="form-control form-control-sm text-muted small"
-                             x-model="line.notes" placeholder="Notes / Warranty clause">
-                    </div>
-                  </div>
+                  <input type="text" class="form-control form-control-sm fw-medium"
+                         x-model="line.itemSnapshot.name" placeholder="Item name" required>
+                  <div class="small text-muted mt-1" x-show="line.itemSnapshot.sku" x-text="`SKU: ${line.itemSnapshot.sku}`"></div>
+                </td>
+                <td>
+                  <textarea rows="1" class="form-control form-control-sm text-muted small"
+                            x-model="line.notes" maxlength="300" placeholder="Short description / specification"></textarea>
                 </td>
                 <td>
                   <input type="number" class="form-control form-control-sm"
-                         min="1" step="any" x-model.number="line.qty" @input="recalculate()">
+                         min="0.01" step="any" x-model.number="line.qty" @input="recalculate()">
                   <span class="small text-muted" x-text="line.itemSnapshot.unit || 'pcs'"></span>
                 </td>
                 <td>
@@ -250,17 +370,22 @@
                   </template>
                 </td>
                 <td class="text-center">
-                  <button type="button" class="btn btn-sm btn-link text-danger p-0" @click="removeItem(idx)" title="Remove item">
-                    <i class="bi bi-trash"></i>
-                  </button>
+                  <div class="d-flex justify-content-center gap-2">
+                    <button type="button" class="btn btn-sm btn-link text-primary p-0" @click="duplicateItem(idx)" title="Duplicate item">
+                      <i class="bi bi-copy"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-link text-danger p-0" @click="removeItem(idx)" title="Remove item">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
                 </td>
               </tr>
             </template>
             <template x-if="items.length === 0">
               <tr>
-                <td colspan="8" class="text-center py-4 text-muted">
+                <td :colspan="canViewCosts ? 9 : 8" class="text-center py-4 text-muted">
                   <i class="bi bi-box fs-3 d-block mb-1"></i>
-                  No components added yet. Select an item from inventory above or click <strong>Add Custom Item</strong>.
+                  No items added yet. Search above or click <strong>Add Blank Row</strong> to start your quotation.
                 </td>
               </tr>
             </template>
@@ -523,9 +648,22 @@
 </div>
 
 <script>
-function quotationForm(initial, inventory, canViewCosts, canViewProfit, isOwner) {
+function quotationForm(initial, inventory, canViewCosts, canViewProfit, isOwner, initialCustomer) {
+  initialCustomer = initialCustomer || {};
+  const newCustomer = initialCustomer.newCustomer || {};
+
   return {
-    customer: initial.customer || '',
+    customer: initialCustomer.id || initial.customer || '',
+    customerMode: initialCustomer.mode || 'existing',
+
+    newCustomerName: newCustomer.name || '',
+    newCustomerPhone: newCustomer.phone || '',
+    newCustomerWhatsapp: newCustomer.whatsapp || '',
+    newCustomerCnic: newCustomer.cnic || '',
+    newCustomerAddress: newCustomer.address || '',
+    newCustomerCity: newCustomer.city || '',
+    newCustomerType: newCustomer.type || 'residential',
+    newCustomerSource: newCustomer.source || 'walk_in',
     survey: initial.survey || '',
     systemConfig: initial.systemConfig || '',
     assignedTo: initial.assignedTo || '',
@@ -556,8 +694,13 @@ function quotationForm(initial, inventory, canViewCosts, canViewProfit, isOwner)
       isOptionalExtra: Boolean(it.isOptionalExtra)
     })),
 
+    itemSearch: '',
+    itemPickerOpen: false,
+    filteredInventory: [],
     pickedItemId: '',
     pickedQty: 1,
+    pickedPrice: null,
+    pickedDescription: '',
 
     laborCost: Number(initial.laborCost) || 0,
     transportCost: Number(initial.transportCost) || 0,
@@ -611,33 +754,109 @@ function quotationForm(initial, inventory, canViewCosts, canViewProfit, isOwner)
       return this.paymentPlan.reduce((acc, ms) => acc + (Number(ms.percent) || 0), 0);
     },
 
-    addInventoryItem() {
-      if (!this.pickedItemId || this.pickedQty <= 0) return;
-      const found = this.inventoryItems.find(i => String(i._id) === String(this.pickedItemId));
-      if (!found) return;
+    get canQuickAdd() {
+      return Boolean(String(this.itemSearch || '').trim()) && Number(this.pickedQty) > 0;
+    },
 
-      this.items.push({
-        item: found._id,
-        itemSnapshot: {
-          sku: found.sku || '',
-          name: found.name,
-          category: found.category || 'other',
-          brand: found.brand || '',
-          model: found.model || '',
-          unit: found.unit || 'pcs',
-          wattage: found.wattage || null,
-          capacityKw: found.capacityKw || null,
-          warrantyYears: found.warrantyYears || null
-        },
-        qty: Number(this.pickedQty),
-        unitSellingPrice: Number((found.sellingPricePaisa || 0) / 100),
-        unitCost: Number((found.unitCostPaisa || found.avgCostPaisa || found.purchasePricePaisa || 0) / 100),
-        notes: '',
-        isOptionalExtra: false
+    filterInventory() {
+      const query = String(this.itemSearch || '').trim().toLowerCase();
+      this.filteredInventory = query
+        ? this.inventoryItems.filter((inv) => {
+            return [inv.name, inv.sku, inv.brand, inv.model, inv.category]
+              .filter(Boolean)
+              .some((value) => String(value).toLowerCase().includes(query));
+          }).slice(0, 12)
+        : this.inventoryItems.slice(0, 12);
+    },
+
+    onItemSearchInput() {
+      if (this.pickedItemId) {
+        const picked = this.inventoryItems.find((i) => String(i._id) === String(this.pickedItemId));
+        if (!picked || String(picked.name || '').toLowerCase() !== String(this.itemSearch || '').trim().toLowerCase()) {
+          this.pickedItemId = '';
+        }
+      }
+      this.itemPickerOpen = true;
+      this.filterInventory();
+    },
+
+    pickFirstInventoryItem() {
+      if (this.filteredInventory.length) {
+        this.selectPickedItem(this.filteredInventory[0]);
+      }
+    },
+
+    selectPickedItem(inv) {
+      this.pickedItemId = inv._id;
+      this.itemSearch = inv.name || '';
+      this.pickedPrice = Number((Number(inv.sellingPricePaisa) || 0) / 100);
+      this.itemPickerOpen = false;
+      this.filteredInventory = [];
+      this.$nextTick(() => {
+        if (this.$refs.quickDescription) this.$refs.quickDescription.focus();
       });
+    },
 
+    addInventoryItem() {
+      const rawName = String(this.itemSearch || '').trim();
+      const qty = Number(this.pickedQty);
+      if (!rawName || !(qty > 0)) return;
+
+      const found = this.pickedItemId
+        ? this.inventoryItems.find((i) => String(i._id) === String(this.pickedItemId))
+        : null;
+      const rate = Math.max(0, Number(this.pickedPrice) || 0);
+      const description = String(this.pickedDescription || '').trim();
+
+      if (found) {
+        this.items.push({
+          item: found._id,
+          itemSnapshot: {
+            sku: found.sku || '',
+            name: found.name,
+            category: found.category || 'other',
+            brand: found.brand || '',
+            model: found.model || '',
+            unit: found.unit || 'pcs',
+            wattage: found.wattage || null,
+            capacityKw: found.capacityKw || null,
+            warrantyYears: found.warrantyYears || null
+          },
+          qty,
+          unitSellingPrice: rate,
+          unitCost: Number((found.unitCostPaisa || found.avgCostPaisa || found.purchasePricePaisa || 0) / 100),
+          notes: description,
+          isOptionalExtra: false
+        });
+      } else {
+        this.items.push({
+          item: null,
+          itemSnapshot: {
+            sku: '',
+            name: rawName,
+            category: 'other',
+            brand: '',
+            model: '',
+            unit: 'pcs',
+            wattage: null,
+            capacityKw: null,
+            warrantyYears: null
+          },
+          qty,
+          unitSellingPrice: rate,
+          unitCost: 0,
+          notes: description,
+          isOptionalExtra: false
+        });
+      }
+
+      this.itemSearch = '';
+      this.itemPickerOpen = false;
+      this.filteredInventory = [];
       this.pickedItemId = '';
       this.pickedQty = 1;
+      this.pickedPrice = null;
+      this.pickedDescription = '';
       this.recalculate();
     },
 
@@ -666,6 +885,25 @@ function quotationForm(initial, inventory, canViewCosts, canViewProfit, isOwner)
 
     removeItem(idx) {
       this.items.splice(idx, 1);
+      this.recalculate();
+    },
+
+    duplicateItem(idx) {
+      const source = this.items[idx];
+      if (!source) return;
+      this.items.splice(idx + 1, 0, JSON.parse(JSON.stringify(source)));
+      this.recalculate();
+    },
+
+    duplicateLastItem() {
+      if (!this.items.length) return;
+      this.duplicateItem(this.items.length - 1);
+    },
+
+    clearItems() {
+      if (!this.items.length) return;
+      if (!window.confirm('Remove all items from this quotation?')) return;
+      this.items = [];
       this.recalculate();
     },
 
@@ -764,13 +1002,30 @@ function quotationForm(initial, inventory, canViewCosts, canViewProfit, isOwner)
     },
 
     handleSubmit(e) {
-      if (!this.customer) {
-        alert('Please select a customer for this quotation.');
+      if (this.customerMode === 'existing' && !this.customer) {
+        alert('Please select an existing customer for this quotation.');
         e.preventDefault();
         return;
       }
+      if (this.customerMode === 'new') {
+        if (!String(this.newCustomerName || '').trim()) {
+          alert('Please enter the new customer name.');
+          e.preventDefault();
+          return;
+        }
+        if (!String(this.newCustomerPhone || '').trim()) {
+          alert('Please enter the new customer phone number.');
+          e.preventDefault();
+          return;
+        }
+      }
       if (!this.items.length) {
         alert('Please add at least one item component to the proposal.');
+        e.preventDefault();
+        return;
+      }
+      if (this.items.some((line) => !String((line.itemSnapshot || {}).name || '').trim())) {
+        alert('Every row needs an item name.');
         e.preventDefault();
         return;
       }

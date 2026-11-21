@@ -241,7 +241,8 @@
       <thead class="table-light">
         <tr>
           <th style="width: 40px;">#</th>
-          <th>Component Description</th>
+          <th>Item</th>
+          <th>Description</th>
           <th>Category</th>
           <th>Brand &amp; Model</th>
           <th class="text-center" style="width: 90px;">Qty</th>
@@ -264,9 +265,9 @@
                   <span class="badge text-bg-info text-white ms-1" style="font-size:0.65rem;">Optional Extra</span>
                 <% } %>
               </div>
-              <% if (line.notes) { %>
-                <div class="text-muted small"><%= line.notes %></div>
-              <% } %>
+            </td>
+            <td class="small text-muted">
+              <%= line.notes || '—' %>
             </td>
             <td>
               <span class="badge text-bg-secondary text-uppercase" style="font-size:0.65rem;">

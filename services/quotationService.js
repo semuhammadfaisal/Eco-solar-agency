@@ -19,6 +19,7 @@ const { calculateSystem } = require('./profitService');
 const { buildQuotationPdf } = require('./quotationPdfService');
 const { sendQuotationEmail } = require('./emailService');
 const accountingService = require('./accountingService');
+const customerService = require('./customerService');
 const {
   nextQuotationNumber,
   nextSaleNumber,
@@ -315,23 +316,63 @@ function normalizeQuotationItems(rawLines = []) {
       unitSellingPricePaisa,
       totalCostPaisa: Math.round(qty * unitCostPaisa),
       totalSellingPricePaisa: Math.round(qty * unitSellingPricePaisa),
-      notes: text(line.notes, 300),
+      notes: text(line.notes || line.description, 300),
       isOptionalExtra: Boolean(line.isOptionalExtra),
     };
   });
 }
 
 /**
- * Create a new Quotation from form data or preloaded SystemConfig.
+ * Resolve the customer for a quotation, creating a brand-new customer profile
+ * when the form is submitted in "New customer" mode.
  */
-async function createQuotation(payload, actor, req) {
+async function resolveQuotationCustomer(payload, actor, req) {
+  if (payload.customerMode === 'new') {
+    if (!can(actor, 'customers.manage')) {
+      throw ApiError.forbidden('You do not have permission to create customers.');
+    }
+
+    const name = text(payload.name, 120);
+    const phone = text(payload.phone, 20);
+    if (!name) throw ApiError.badRequest('Customer name is required for a new customer.');
+    if (!phone) throw ApiError.badRequest('Customer phone number is required.');
+
+    return customerService.createCustomer(
+      {
+        name,
+        phone,
+        whatsapp: payload.whatsapp,
+        cnic: payload.cnic,
+        address: payload.address,
+        city: payload.city,
+        area: payload.area,
+        gpsLat: payload.gpsLat,
+        gpsLng: payload.gpsLng,
+        disco: payload.disco,
+        electricityReferenceNo: payload.electricityReferenceNo,
+        type: payload.customerType,
+        source: payload.customerSource,
+        notes: payload.customerNotes,
+        assignedTo: actor.role === 'sales' ? actor._id : payload.assignedTo,
+      },
+      actor,
+      req
+    );
+  }
+
   if (!payload.customer || !mongoose.isValidObjectId(payload.customer)) {
     throw ApiError.badRequest('Select a valid customer.');
   }
 
-  const customer = await Customer.findById(payload.customer);
+  const customer = await Customer.findById(payload.customer).select('_id name');
   if (!customer) throw ApiError.badRequest('Customer not found.');
+  return customer;
+}
 
+/**
+ * Create a new Quotation from form data or preloaded SystemConfig.
+ */
+async function createQuotation(payload, actor, req) {
   const settings = await getSettings();
   const quotationNumber = await nextQuotationNumber();
 
@@ -398,6 +439,9 @@ async function createQuotation(payload, actor, req) {
 
   const paymentOption = payload.paymentOption === 'installment' ? 'installment' : 'cash';
   const paymentPlan = normalizePaymentPlan(paymentOption, payload.paymentPlan, calc.finalPricePaisa);
+
+  // Resolve this last so validation failures do not leave behind a new customer.
+  const customer = await resolveQuotationCustomer(payload, actor, req);
 
   const quotation = await Quotation.create({
     quotationNumber,
@@ -723,6 +767,8 @@ module.exports = {
   nextInvoiceNumber,
   listQuotations,
   getQuotationOrThrow,
+  resolveQuotationCustomer,
+  normalizeQuotationItems,
   createQuotation,
   duplicateAsNewRevision,
   updateQuotationStatus,

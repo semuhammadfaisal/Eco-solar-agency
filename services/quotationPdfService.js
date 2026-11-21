@@ -143,7 +143,8 @@ function buildQuotationPdf(quotation, settings = {}) {
     doc.rect(40, tableTop, 515, 17).fill('#0f766e');
     doc.font('Helvetica-Bold').fontSize(7.5).fillColor('#ffffff');
     doc.text('#', 44, tableTop + 5, { width: 20 });
-    doc.text('ITEM DESCRIPTION & SPECIFICATIONS', 68, tableTop + 5, { width: 230 });
+    doc.text('ITEM', 68, tableTop + 5, { width: 96 });
+    doc.text('DESCRIPTION / SPECS', 170, tableTop + 5, { width: 124 });
     doc.text('WARRANTY', 302, tableTop + 5, { width: 60 });
     doc.text('QTY', 366, tableTop + 5, { width: 45, align: 'right' });
     doc.text('RATE (PKR)', 416, tableTop + 5, { width: 64, align: 'right' });
@@ -153,19 +154,9 @@ function buildQuotationPdf(quotation, settings = {}) {
 
     const items = quotation.items || [];
     items.forEach((line, idx) => {
-      checkPageSpace(doc, 24);
-      const rowY = doc.y;
       const snap = line.itemSnapshot || {};
-
-      // Alternate row zebra
-      if (idx % 2 === 1) {
-        doc.rect(40, rowY - 1, 515, 20).fill('#f8fafc');
-      }
-
-      doc.font('Helvetica').fontSize(7.5).fillColor('#64748b').text(String(idx + 1), 44, rowY + 3, { width: 20 });
-
-      // Title & Specs
-      doc.font('Helvetica-Bold').fontSize(8).fillColor('#0f172a').text(snap.name || 'Component item', 68, rowY + 2, { width: 228 });
+      const itemName = display(snap.name, 'Component item');
+      const description = line.notes ? `Description: ${display(line.notes, '')}` : '';
       const specText = [
         snap.brand ? `${snap.brand} ${snap.model || ''}`.trim() : '',
         snap.wattage ? `${snap.wattage}W` : '',
@@ -173,8 +164,34 @@ function buildQuotationPdf(quotation, settings = {}) {
         line.isOptionalExtra ? '[OPTIONAL EXTRA]' : '',
       ].filter(Boolean).join(' · ');
 
+      doc.font('Helvetica-Bold').fontSize(8);
+      const itemHeight = doc.heightOfString(itemName, { width: 96 });
+      doc.font('Helvetica').fontSize(7);
+      const descHeight = description ? doc.heightOfString(description, { width: 124 }) : 0;
+      const specHeight = specText ? doc.heightOfString(specText, { width: 124 }) : 0;
+      const textGap = description && specText ? 4 : 0;
+      const rowHeight = Math.max(22, itemHeight + 6, descHeight + specHeight + textGap + 6);
+
+      checkPageSpace(doc, rowHeight + 6);
+      const rowY = doc.y;
+
+      // Alternate row zebra
+      if (idx % 2 === 1) {
+        doc.rect(40, rowY - 1, 515, rowHeight).fill('#f8fafc');
+      }
+
+      doc.font('Helvetica').fontSize(7.5).fillColor('#64748b').text(String(idx + 1), 44, rowY + 3, { width: 20 });
+
+      // Item name is kept separate from its description on the proposal.
+      doc.font('Helvetica-Bold').fontSize(8).fillColor('#0f172a').text(itemName, 68, rowY + 2, { width: 96 });
+
+      let detailY = rowY + 2;
+      if (description) {
+        doc.font('Helvetica').fontSize(7).fillColor('#334155').text(description, 170, detailY, { width: 124 });
+        detailY += descHeight + 2;
+      }
       if (specText) {
-        doc.font('Helvetica').fontSize(7).fillColor('#64748b').text(specText, 68, rowY + 11, { width: 228 });
+        doc.font('Helvetica').fontSize(7).fillColor('#64748b').text(specText, 170, detailY, { width: 124 });
       }
 
       const warranty = snap.warrantyYears ? `${snap.warrantyYears} Years` : 'Standard';
@@ -186,7 +203,7 @@ function buildQuotationPdf(quotation, settings = {}) {
       doc.text(formatPKR(line.unitSellingPricePaisa), 416, rowY + 4, { width: 64, align: 'right' });
       doc.font('Helvetica-Bold').text(formatPKR(line.totalSellingPricePaisa), 485, rowY + 4, { width: 65, align: 'right' });
 
-      doc.y = rowY + 21;
+      doc.y = rowY + rowHeight;
     });
 
     // 4. Scope of Works & Logistics
